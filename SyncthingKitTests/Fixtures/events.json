@@ -1,0 +1,21 @@
+[
+  { "id": 2, "globalID": 2, "type": "DeviceConnected", "time": "2014-07-13T21:04:33.687836696+02:00",
+    "data": { "addr": "172.16.32.25:22000", "id": "NFGKEKE-7Z6RTH7-I3PRZXS-DEJF3UJ-FRWJBFO-VBBTDND-4SGNGVZ-QUQHJAG", "deviceName": "Laptop", "clientName": "syncthing", "clientVersion": "v0.13.4", "type": "TCP (Client)" } },
+  { "id": 3, "globalID": 3, "type": "StateChanged", "time": "2014-07-17T13:14:28.697493016+02:00",
+    "data": { "folder": "default", "from": "scanning", "duration": 0.19782869900000002, "to": "idle" } },
+  { "id": 4, "globalID": 4, "type": "FolderCompletion", "time": "2022-04-27T14:14:27.043576583+09:00",
+    "data": { "completion": 100, "device": "I6KAH76-66SLLLB-5PFXSOA-UFJCDZC-YAOMLEK-CP2GB32-BV5RQST-3PSROAU", "folder": "default", "globalBytes": 17, "globalItems": 4, "needBytes": 0, "needDeletes": 0, "needItems": 0, "remoteState": "valid", "sequence": 12 } },
+  { "id": 5, "globalID": 5, "type": "FolderErrors", "time": "2015-06-26T13:39:24.697401384+02:00",
+    "data": { "errors": [ { "error": "permission denied", "path": "h2j/aslkjd" } ], "folder": "default" } },
+  { "id": 6, "globalID": 6, "type": "FolderScanProgress", "time": "2017-03-06T15:00:58.072004209+01:00",
+    "data": { "total": 200, "rate": 12.5, "current": 50, "folder": "bd7q3-zskm5" } },
+  { "id": 7, "globalID": 7, "type": "FolderPaused", "time": "2021-06-07T23:45:03.414609034+02:00", "data": { "id": "abcde-fghij", "label": "My folder" } },
+  { "id": 8, "globalID": 8, "type": "DevicePaused", "time": "2014-07-17T13:28:05.043465207+02:00", "data": { "device": "NFGKEKE-7Z6RTH7-I3PRZXS-DEJF3UJ-FRWJBFO-VBBTDND-4SGNGVZ-QUQHJAG" } },
+  { "id": 9, "globalID": 9, "type": "DeviceDisconnected", "time": "2014-07-13T21:18:52.859929215+02:00", "data": { "error": "unexpected EOF", "id": "NFGKEKE-7Z6RTH7-I3PRZXS-DEJF3UJ-FRWJBFO-VBBTDND-4SGNGVZ-QUQHJAG" } },
+  { "id": 10, "globalID": 10, "type": "PendingDevicesChanged", "time": "2020-12-22T22:24:37.578586718+01:00",
+    "data": { "added": [ { "address": "127.0.0.1:51807", "deviceID": "EJHMPAQ-OGCVORE-ISB4IS3-SYYVJXF-TKJGLTU-66DIQPF-GJ5D2GX-GQ3OWQK", "name": "My dusty computer" } ] } },
+  { "id": 11, "globalID": 11, "type": "FolderSummary", "time": "2024-01-31T08:27:30.777875+01:00",
+    "data": { "folder": "default", "summary": { "globalBytes": 4, "globalFiles": 1, "needBytes": 0, "state": "idle", "stateChanged": "2024-01-31T08:27:24+01:00", "watchError": "" } } },
+  { "id": 12, "globalID": 14, "type": "SomeFutureEvent", "time": "2030-01-01T00:00:00Z", "data": null },
+  { "id": 13, "globalID": 15, "type": "LoginAttempt", "time": "2030-01-01T00:00:00Z", "data": { "username": "x", "success": false } }
+]

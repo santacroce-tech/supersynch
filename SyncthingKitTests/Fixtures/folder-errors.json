@@ -1,0 +1,1 @@
+{ "folder": "nnhic-sxuae", "errors": [ { "path": "noperm.txt", "error": "hashing: open /path/to/folder/noperm.txt: permission denied" } ], "page": 1, "perpage": 100 }

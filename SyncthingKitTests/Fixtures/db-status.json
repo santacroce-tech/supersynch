@@ -1,0 +1,12 @@
+{
+  "errors": 0, "globalBytes": 1000, "globalDeleted": 3, "globalDirectories": 4, "globalFiles": 10,
+  "globalSymlinks": 0, "globalTotalItems": 17, "ignorePatterns": false, "inSyncBytes": 750, "inSyncFiles": 8,
+  "invalid": "", "localBytes": 800, "localDeleted": 3, "localDirectories": 4, "localFiles": 9,
+  "localSymlinks": 0, "localTotalItems": 16, "needBytes": 250, "needDeletes": 0, "needDirectories": 0,
+  "needFiles": 2, "needSymlinks": 0, "needTotalItems": 2, "pullErrors": 0,
+  "receiveOnlyChangedBytes": 0, "receiveOnlyChangedDeletes": 0, "receiveOnlyChangedDirectories": 0,
+  "receiveOnlyChangedFiles": 0, "receiveOnlyChangedSymlinks": 0, "receiveOnlyTotalItems": 0,
+  "remoteSequence": { "MRIW7OK-NETT3M4-N6SBWME-N25O76W-YJKVXPH-FUMQJ3S-P57B74J-GBITBAC": 37329 },
+  "sequence": 42, "state": "syncing", "stateChanged": "2018-08-08T07:04:57.301064781+02:00",
+  "version": 42, "watchError": ""
+}

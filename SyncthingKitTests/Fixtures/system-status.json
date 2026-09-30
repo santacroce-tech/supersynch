@@ -1,0 +1,23 @@
+{
+  "alloc": 30618136,
+  "connectionServiceStatus": {
+    "tcp://0.0.0.0:22000": { "error": null, "lanAddresses": ["tcp://0.0.0.0:22000"], "wanAddresses": ["tcp://0.0.0.0:22000"] },
+    "quic://0.0.0.0:22000": { "error": "listen udp: address already in use", "lanAddresses": [], "wanAddresses": [] }
+  },
+  "cpuPercent": 0,
+  "discoveryEnabled": true,
+  "discoveryStatus": {
+    "IPv4 local": { "error": null },
+    "global@https://discovery-v4.syncthing.net/v2/": { "error": "500 Internal Server Error" }
+  },
+  "goroutines": 49,
+  "lastDialStatus": { "tcp://10.20.30.40": { "when": "2019-05-16T07:41:23Z", "error": "dial tcp 10.20.30.40:22000: i/o timeout" } },
+  "myID": "P56IOI7-MZJNU2Y-IQGDREY-DM2MGTI-MGL3BXN-PQ6W5BM-TBBZ4TJ-XZWICQ2",
+  "pathSeparator": "/",
+  "startTime": "2016-06-06T19:41:43.039284753+02:00",
+  "sys": 42092792,
+  "themes": ["default", "dark"],
+  "tilde": "/Users/jb",
+  "uptime": 2635,
+  "someFutureField": { "nested": [1, 2, 3] }
+}

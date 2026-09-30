@@ -1,0 +1,15 @@
+[
+  {
+    "id": "default", "label": "Default Folder", "filesystemType": "basic", "path": "/Users/jb/Sync/",
+    "type": "sendreceive",
+    "devices": [
+      { "deviceID": "S7UKX27-GI7ZTXS-GC6RKUA-7AJGZ44-C6NAYEB-HSKTJQK-KJHU2NO-CWV7EQW", "introducedBy": "", "encryptionPassword": "" },
+      { "deviceID": "P56IOI7-MZJNU2Y-IQGDREY-DM2MGTI-MGL3BXN-PQ6W5BM-TBBZ4TJ-XZWICQ2", "introducedBy": "", "encryptionPassword": "" }
+    ],
+    "rescanIntervalS": 3600, "fsWatcherEnabled": true, "fsWatcherDelayS": 10, "ignorePerms": false,
+    "autoNormalize": true, "minDiskFree": { "value": 1, "unit": "%" },
+    "versioning": { "type": "", "params": {}, "cleanupIntervalS": 3600, "fsPath": "", "fsType": "basic" },
+    "paused": false, "markerName": ".stfolder", "group": "Home"
+  },
+  { "id": "abcde-fghij", "type": "receiveonly", "paused": true }
+]

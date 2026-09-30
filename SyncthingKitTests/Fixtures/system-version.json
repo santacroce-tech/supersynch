@@ -1,0 +1,10 @@
+{
+  "arch": "amd64",
+  "longVersion": "syncthing v2.0.10 \"Hafnium Hornet\" (go1.24.5 linux-amd64) builder@github.syncthing.net 2025-09-01 00:00:00 UTC",
+  "os": "linux",
+  "version": "v2.0.10",
+  "codename": "Hafnium Hornet",
+  "isBeta": false,
+  "isCandidate": false,
+  "isRelease": true
+}
