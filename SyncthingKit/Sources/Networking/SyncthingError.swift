@@ -72,7 +72,8 @@ extension SyncthingError: LocalizedError {
 }
 
 /// Details of a server certificate shown to the user before pinning.
-public struct CertificateInfo: Sendable, Equatable, Hashable {
+public struct CertificateInfo: Sendable, Equatable, Hashable, Identifiable {
+    public var id: String { sha256 }
     /// SHA-256 over the DER-encoded leaf certificate, uppercase hex.
     public var sha256: String
     public var subject: String

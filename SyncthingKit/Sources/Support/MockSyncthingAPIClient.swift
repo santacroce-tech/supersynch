@@ -28,6 +28,22 @@ public actor MockSyncthingAPIClient: SyncthingAPIClient {
 
     public init() {}
 
+    /// A mock that serves `state` (for demo mode and previews).
+    public init(preloaded state: ServerState) {
+        if let status = state.status { statusResponse = .success(status) }
+        if let version = state.version { versionResponse = .success(version) }
+        folderList = state.folders
+        deviceList = state.devices
+        folderStatuses = state.folderStatuses
+        connectionsResponse = ConnectionsResponse(connections: state.connections, total: state.totals ?? TransferTotals())
+        deviceCompletions = state.deviceCompletion
+        devStats = state.deviceStats
+        fldStats = state.folderStats
+        errors = state.systemErrors
+        pendingDeviceList = state.pendingDevices
+        pendingFolderList = state.pendingFolders
+    }
+
     public func configure(_ body: @Sendable (isolated MockSyncthingAPIClient) -> Void) {
         body(self)
     }

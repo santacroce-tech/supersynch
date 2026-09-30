@@ -118,6 +118,12 @@ public final class ServerEditorModel {
     /// The user confirmed the certificate: pin it and retry.
     public func trustReviewedCertificate(andSaveTo store: ServerStore) async -> ServerConfig? {
         guard let info = certificateToReview else { return nil }
+        return await trust(info, andSaveTo: store)
+    }
+
+    /// Pins `info` and retries. Takes the certificate explicitly because the
+    /// review sheet may already have cleared `certificateToReview`.
+    public func trust(_ info: CertificateInfo, andSaveTo store: ServerStore) async -> ServerConfig? {
         pinnedFingerprint = info.sha256
         certificateToReview = nil
         return await validateAndSave(to: store)
