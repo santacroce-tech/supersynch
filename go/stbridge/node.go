@@ -212,8 +212,11 @@ func (n *Node) applyMobileDefaults(cfg config.Wrapper, deviceName string, firstR
 		c.Options.URAccepted = -1
 		c.Options.CREnabled = false
 		c.Options.AutoUpgradeIntervalH = 0
-		if c.Defaults.Folder.Path == "" || c.Defaults.Folder.Path == "~" {
-			c.Defaults.Folder.Path = n.defaultFolder
+		// New folders default into the app's Documents (visible in Files).
+		c.Defaults.Folder.Path = portablePath(n.defaultFolder)
+		// Repair paths left pointing at a previous app container.
+		for i := range c.Folders {
+			c.Folders[i].Path = portablePath(c.Folders[i].Path)
 		}
 		dev, ok := c.DeviceMap()[n.myID]
 		if !ok {

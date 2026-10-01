@@ -205,7 +205,7 @@ struct ConflictsView: View {
 
     private func load() {
         guard let folder = session.state.folder(folderID) else { return }
-        conflicts = Self.find(in: URL(filePath: folder.path, directoryHint: .isDirectory))
+        conflicts = Self.find(in: FolderPath.resolve(folder.path))
     }
 
     static func find(in root: URL) -> [Conflict] {

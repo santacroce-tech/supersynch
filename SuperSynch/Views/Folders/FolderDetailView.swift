@@ -130,7 +130,7 @@ struct FolderDetailView: View {
 
             Section("Details") {
                 InfoRow(title: "Folder ID", value: folder.id, monospaced: true)
-                InfoRow(title: "Path", value: folder.path, monospaced: true)
+                InfoRow(title: "Location", value: FolderPath.displayName(folder.path))
                 InfoRow(title: "Type", value: folder.typeDescription)
                 InfoRow(title: "Last Scan", value: Format.relative(stats?.lastScan))
                 if let name = stats?.lastFileName {

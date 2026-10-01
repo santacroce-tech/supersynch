@@ -306,3 +306,30 @@ final class NetworkPolicyTests: XCTestCase {
         XCTAssertTrue(NetworkPolicy(defaults: defaults, monitorPath: false).wifiOnly, "setting persists")
     }
 }
+
+final class FolderPathTests: XCTestCase {
+    private let home = "/var/mobile/Containers/Data/Application/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+
+    func testExpand() {
+        XCTAssertEqual(FolderPath.expand("~/Documents/Sync", home: home), home + "/Documents/Sync")
+        XCTAssertEqual(FolderPath.expand("~", home: home), home)
+        XCTAssertEqual(FolderPath.expand("/abs/path", home: home), "/abs/path")
+        XCTAssertEqual(FolderPath.resolve("~/Documents", home: home).path, home + "/Documents")
+    }
+
+    func testPortable() {
+        XCTAssertEqual(FolderPath.portable(home + "/Documents/Sync", home: home), "~/Documents/Sync")
+        XCTAssertEqual(FolderPath.portable(home, home: home), "~")
+        // A previous container's path (after reinstall) maps to the same place.
+        XCTAssertEqual(FolderPath.portable("/var/mobile/Containers/Data/Application/98A907DB-5D9D-4699-ABB7-BE65FBB25BA8/Documents/Sync",
+                                           home: home), "~/Documents/Sync")
+        XCTAssertEqual(FolderPath.portable("/private/var/mobile/Containers/Shared/AppGroup/X/Docs", home: home),
+                       "/private/var/mobile/Containers/Shared/AppGroup/X/Docs", "other locations unchanged")
+    }
+
+    func testDisplayName() {
+        XCTAssertEqual(FolderPath.displayName("~/Documents/Sync/Photos"), "On My iPhone › SuperSynch › Sync › Photos")
+        XCTAssertEqual(FolderPath.displayName("~/Documents"), "On My iPhone › SuperSynch")
+        XCTAssertEqual(FolderPath.displayName("/elsewhere/x"), "/elsewhere/x")
+    }
+}

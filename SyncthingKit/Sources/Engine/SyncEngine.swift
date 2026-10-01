@@ -98,9 +98,22 @@ public final class SyncEngine {
         switch result {
         case .success:
             status = .running
+            await refreshExternalFolderPaths()
         case .failure(let error):
             externalFolders.endAccess()
             status = .failed((error as NSError).localizedDescription)
+        }
+    }
+
+    /// Folders outside the app are reached through security-scoped bookmarks,
+    /// whose resolved path can change (e.g. the other app was reinstalled).
+    /// Point Syncthing at the current location.
+    private func refreshExternalFolderPaths() async {
+        let urls = externalFolders.activeURLs
+        guard !urls.isEmpty, let folders = try? await client.folders() else { return }
+        for folder in folders {
+            guard let url = urls[folder.id], folder.path != url.path else { continue }
+            try? await client.setFolder(["id": .string(folder.id), "path": .string(url.path)])
         }
     }
 

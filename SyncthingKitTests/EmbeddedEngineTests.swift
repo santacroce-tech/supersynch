@@ -42,7 +42,9 @@ final class EmbeddedEngineTests: XCTestCase {
         XCTAssertEqual(options["urAccepted"], -1, "usage reporting off")
         XCTAssertEqual(options["crashReportingEnabled"], false)
         let defaults = try await engine.client.folderDefaults()
-        XCTAssertEqual(defaults["path"]?.stringValue, engine.paths.folderRoot.path, "new folders default into Documents")
+        let defaultPath = try XCTUnwrap(defaults["path"]?.stringValue)
+        XCTAssertEqual((FolderPath.expand(defaultPath) as NSString).standardizingPath,
+                       (engine.paths.folderRoot.path as NSString).standardizingPath, "new folders default into Documents")
     }
 
     func testSessionFollowsEngineAndManagesFolders() async throws {

@@ -27,7 +27,7 @@ struct FileBrowserView: View {
 
     private var directory: URL? {
         guard let folder = session.state.folder(folderID) else { return nil }
-        let root = URL(filePath: folder.path, directoryHint: .isDirectory)
+        let root = FolderPath.resolve(folder.path)
         return subpath.isEmpty ? root : root.appending(path: subpath, directoryHint: .isDirectory)
     }
 

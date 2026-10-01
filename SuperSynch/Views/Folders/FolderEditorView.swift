@@ -31,7 +31,8 @@ struct FolderEditorView: View {
 
     private var inAppPath: String {
         let name = label.isEmpty ? folderID : label
-        return PathSuggestion.make(defaultPath: app.engine?.paths.folderRoot.path ?? "~", name: name, separator: "/")
+        let root = app.engine.map { FolderPath.portable($0.paths.folderRoot.path) } ?? "~/Documents"
+        return PathSuggestion.make(defaultPath: root, name: name, separator: "/")
     }
 
     var body: some View {
@@ -51,7 +52,7 @@ struct FolderEditorView: View {
 
                 if let existing {
                     Section("Location") {
-                        Text(existing.path).font(.caption.monospaced()).textSelection(.enabled)
+                        Text(FolderPath.displayName(existing.path)).font(.callout).textSelection(.enabled)
                     }
                 } else {
                     Section {
@@ -202,7 +203,7 @@ struct FolderEditorView: View {
             }
         } else {
             path = inAppPath
-            try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+            try? FileManager.default.createDirectory(atPath: FolderPath.expand(path), withIntermediateDirectories: true)
         }
         let draft = FolderDraft(id: id, label: label, path: path, type: type, deviceIDs: Array(shared),
                                 encryptionPasswords: sharedPasswords, versioning: versioning.config(keep: keep))

@@ -65,7 +65,7 @@ func TestNodeLifecycleAndQueries(t *testing.T) {
 
 	// Folder defaults point inside the app's folder root.
 	def := decode[map[string]any](t)(n.DefaultFolderJSON())
-	if def["path"] != filepath.Join(dir, "folders") {
+	if def["path"] != portablePath(filepath.Join(dir, "folders")) {
 		t.Fatalf("default folder path = %v", def["path"])
 	}
 
@@ -291,5 +291,46 @@ func TestSyncWithPeer(t *testing.T) {
 	evs, err := phone.Events(0, 0, 0)
 	if err != nil || !strings.Contains(evs, "ItemFinished") {
 		t.Fatalf("expected ItemFinished events (err=%v)", err)
+	}
+}
+
+func TestPortablePath(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	cases := map[string]string{
+		"/var/mobile/Containers/Data/Application/98A907DB-5D9D-4699-ABB7-BE65FBB25BA8/Documents/Sync": "~/Documents/Sync",
+		"/private/var/mobile/Containers/Data/Application/917F9A5D-FB36-4367-9E9B-E8437F4DBFA9/Documents/": "~/Documents",
+		"/var/mobile/Containers/Data/Application/917F9A5D-FB36-4367-9E9B-E8437F4DBFA9":                  "~",
+		"/Users/x/Library/Developer/CoreSimulator/Devices/2AE878C1-9F53-4332-B145-E2F2719B3768/data/Containers/Data/Application/EECEAD5C-4176-448D-A69B-A4092FF4A3A1/Documents/A": "~/Documents/A",
+		"~/Documents/Sync": "~/Documents/Sync",
+		"/var/mobile/Containers/Shared/AppGroup/1111/File Provider Storage/X": "/var/mobile/Containers/Shared/AppGroup/1111/File Provider Storage/X",
+		filepath.Join(home, "Documents", "B"): "~/Documents/B",
+		"": "",
+	}
+	for in, want := range cases {
+		if got := portablePath(in); got != want {
+			t.Errorf("portablePath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A folder saved with a previous container's absolute path is repaired on start.
+func TestStaleContainerPathIsRepaired(t *testing.T) {
+	n, dir := newTestNode(t)
+	stale := "/var/mobile/Containers/Data/Application/98A907DB-5D9D-4699-ABB7-BE65FBB25BA8/Documents/Sync"
+	if err := n.SetFolderJSON(fmt.Sprintf(`{"id":"default","label":"Sync","path":%q}`, stale)); err != nil {
+		t.Fatal(err)
+	}
+	n.Stop()
+	if err := n.Start("test-phone"); err != nil {
+		t.Fatal(err)
+	}
+	folders := decode[[]map[string]any](t)(n.FoldersJSON())
+	if folders[0]["path"] != "~/Documents/Sync" {
+		t.Fatalf("path not repaired: %v", folders[0]["path"])
+	}
+	def := decode[map[string]any](t)(n.DefaultFolderJSON())
+	want := portablePath(filepath.Join(dir, "folders"))
+	if def["path"] != want {
+		t.Fatalf("default path = %v, want %v", def["path"], want)
 	}
 }
