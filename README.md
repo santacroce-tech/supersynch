@@ -105,6 +105,9 @@ TEST_RUNNER_PEER_URL=http://127.0.0.1:8386 TEST_RUNNER_PEER_API_KEY=e2e-key scri
 
 > **Simulator note:** in the simulator the app's Syncthing listens on port 22010 so it doesn't clash with a Syncthing on your Mac; see [Limitations](#limitations).
 
+### Debugging on a device
+The embedded Syncthing is Go. The Go runtime handles some memory faults and signals itself, which LLDB would otherwise stop on as `EXC_BAD_ACCESS` even though nothing crashed. The scheme loads `SuperSynch.lldbinit` to pass them through. If you debug with a scheme that doesn't, add it under *Edit Scheme → Run → Info → LLDB Init File*.
+
 ### Demo mode
 `-DemoMode` runs the UI against sample data without starting Syncthing:
 ```sh

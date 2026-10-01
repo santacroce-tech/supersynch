@@ -1,0 +1,12 @@
+# Loaded by the SuperSynch scheme (project.yml → customLLDBInit).
+#
+# The embedded Syncthing is Go. The Go runtime handles some memory faults
+# itself (it turns them into panics that library code recovers from) and uses
+# signals for goroutine preemption. LLDB normally stops on these as
+# EXC_BAD_ACCESS / signals before Go sees them, which looks like a crash in
+# Xcode but isn't one. Pass them through to the process instead.
+# A genuine crash still terminates the app and produces a crash report.
+settings set platform.plugin.darwin.ignored-exceptions EXC_BAD_ACCESS
+process handle SIGSEGV --notify false --pass true --stop false
+process handle SIGBUS --notify false --pass true --stop false
+process handle SIGURG --notify false --pass true --stop false

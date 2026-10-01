@@ -97,3 +97,5 @@ schemes:
       gatherCoverageData: true
     run:
       config: Debug
+      # Lets the Go runtime handle its own faults/signals under the debugger.
+      customLLDBInit: ${SRCROOT}/SuperSynch.lldbinit

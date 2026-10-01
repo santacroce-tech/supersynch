@@ -11,6 +11,7 @@ iOS/iPadOS 17+ app that **embeds Syncthing** (v2.1.5) so the phone is a Syncthin
   - Go: set `PEER_URL` and `PEER_API_KEY`.
 - **The dev Mac runs the user's real Syncthing.app on port 22000.** Tests must never bind default ports or talk to it. Use `SyncEngine(startupOptions:)` / `Node.SetStartupOptionsJSON` with loopback port 22100 and discovery/relays off.
 - UI checks: launch with `-DemoMode [-DemoSection …] [-DemoFolder …]` (mock data, no engine), then `xcrun simctl io <dev> screenshot`.
+- Debugging on device: the scheme loads `SuperSynch.lldbinit`, which passes EXC_BAD_ACCESS/SIGSEGV/SIGBUS/SIGURG through to the Go runtime (it handles them itself). An `EXC_BAD_ACCESS` stop in Go code without it is usually not a real crash; confirm by launching without the debugger (`xcrun devicectl device process launch --console …`).
 - The build must stay warning-free (Swift 6, strict concurrency).
 
 ## Architecture
