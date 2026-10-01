@@ -81,6 +81,27 @@ func TestNodeLifecycleAndQueries(t *testing.T) {
 		s := decode[map[string]any](t)(n.FolderStatusJSON("docs"))
 		return s["state"] == "idle"
 	})
+	// Model access works (reflection into lib/syncthing internals).
+	if _, err := modelOf(n.app); err != nil {
+		t.Fatalf("model access: %v", err)
+	}
+	// Folder summary comes from Syncthing's own summary service.
+	sum := decode[map[string]any](t)(n.FolderStatusJSON("docs"))
+	if _, ok := sum["receiveOnlyTotalItems"]; !ok {
+		t.Fatalf("summary missing fields: %v", sum)
+	}
+	// Ignore patterns round-trip.
+	if err := n.SetIgnoresJSON("docs", `["*.tmp","(?d).DS_Store"]`); err != nil {
+		t.Fatal(err)
+	}
+	ign := decode[map[string][]string](t)(n.IgnoresJSON("docs"))
+	if len(ign["ignore"]) != 2 || ign["ignore"][0] != "*.tmp" {
+		t.Fatalf("ignores = %v", ign)
+	}
+	// Warnings/errors are captured from Syncthing's logger.
+	decode[map[string]any](t)(n.LogJSON())
+	decode[map[string]any](t)(n.ErrorsJSON())
+
 	if err := n.SetFolderPaused("docs", true); err != nil {
 		t.Fatal(err)
 	}
@@ -166,10 +187,8 @@ func TestSyncWithPeer(t *testing.T) {
 	macDir := t.TempDir()
 	phoneDir := filepath.Join(dir, "folders", "shared")
 
-	// Pair both ways.
-	if err := phone.SetDeviceJSON(fmt.Sprintf(`{"deviceID":%q,"name":"mac","addresses":["tcp://127.0.0.1:22001"]}`, macID)); err != nil {
-		t.Fatal(err)
-	}
+	// The Mac adds the phone first and dials it: the phone sees a pending
+	// device, which Syncthing persists across restarts.
 	mac.do(t, "POST", "/rest/config/devices", map[string]any{
 		"deviceID": phoneID, "name": "phone", "addresses": []string{"tcp://127.0.0.1:22100"},
 	})
@@ -177,6 +196,23 @@ func TestSyncWithPeer(t *testing.T) {
 		mac.do(t, "DELETE", "/rest/config/folders/"+folderID, nil)
 		mac.do(t, "DELETE", "/rest/config/devices/"+phoneID, nil)
 	})
+	waitFor(t, 30*time.Second, func() bool {
+		p := decode[map[string]any](t)(phone.PendingDevicesJSON())
+		_, ok := p[macID]
+		return ok
+	})
+	phone.Stop()
+	if err := phone.Start("test-phone"); err != nil {
+		t.Fatal(err)
+	}
+	if p := decode[map[string]any](t)(phone.PendingDevicesJSON()); p[macID] == nil {
+		t.Fatalf("pending device not persisted across restart: %v", p)
+	}
+
+	// Accept it.
+	if err := phone.SetDeviceJSON(fmt.Sprintf(`{"deviceID":%q,"name":"mac","addresses":["tcp://127.0.0.1:22001"]}`, macID)); err != nil {
+		t.Fatal(err)
+	}
 
 	// Share a folder.
 	mac.do(t, "POST", "/rest/config/folders", map[string]any{
@@ -184,7 +220,8 @@ func TestSyncWithPeer(t *testing.T) {
 		"devices": []map[string]string{{"deviceID": phoneID}},
 	})
 	if err := phone.SetFolderJSON(fmt.Sprintf(`{"id":%q,"label":"Shared","path":%q,"fsWatcherEnabled":false,
-		"rescanIntervalS":5,"devices":[{"deviceID":%q}]}`, folderID, phoneDir, macID)); err != nil {
+		"rescanIntervalS":5,"devices":[{"deviceID":%q}],"versioning":{"type":"trashcan","params":{"cleanoutDays":"0"}}}`,
+		folderID, phoneDir, macID)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -215,6 +252,36 @@ func TestSyncWithPeer(t *testing.T) {
 		b, err := os.ReadFile(filepath.Join(macDir, "from-phone.txt"))
 		return err == nil && string(b) == "hello mac"
 	})
+
+	// Per-device byte counters are available.
+	conns := decode[map[string]any](t)(phone.ConnectionsJSON())
+	macConn := conns["connections"].(map[string]any)[macID].(map[string]any)
+	if macConn["inBytesTotal"].(float64) <= 0 || macConn["connected"] != true {
+		t.Fatalf("per-device stats missing: %v", macConn)
+	}
+
+	// Deleting on the Mac archives the phone's copy (trashcan versioning),
+	// and it can be restored.
+	if err := os.Remove(filepath.Join(macDir, "from-mac.txt")); err != nil {
+		t.Fatal(err)
+	}
+	mac.do(t, "POST", "/rest/db/scan?folder="+folderID, nil)
+	var versionTime string
+	waitFor(t, 60*time.Second, func() bool {
+		v := decode[map[string][]map[string]any](t)(phone.FolderVersionsJSON(folderID))
+		if len(v["from-mac.txt"]) == 0 {
+			return false
+		}
+		versionTime, _ = v["from-mac.txt"][0]["versionTime"].(string)
+		return true
+	})
+	failed := decode[map[string]string](t)(phone.RestoreVersionsJSON(folderID, fmt.Sprintf(`{"from-mac.txt":%q}`, versionTime)))
+	if len(failed) != 0 {
+		t.Fatalf("restore failed: %v", failed)
+	}
+	if b, err := os.ReadFile(filepath.Join(phoneDir, "from-mac.txt")); err != nil || string(b) != "hello phone" {
+		t.Fatalf("restored file: %q %v", b, err)
+	}
 
 	// Completion and events reflect the sync.
 	comp := decode[map[string]any](t)(phone.CompletionJSON(folderID, macID))

@@ -70,7 +70,6 @@ func (n *Node) SetDeviceJSON(deviceJSON string) error {
 	if device.DeviceID == protocol.EmptyDeviceID {
 		return fmt.Errorf("device needs a valid deviceID")
 	}
-	n.cache.removePending(device.DeviceID.String())
 	return n.modify(func(c *config.Configuration) error {
 		c.SetDevice(device)
 		return nil
@@ -181,20 +180,58 @@ func (n *Node) Scan(id string) error {
 	return app.Internals.ScanFolderSubdirs(id, nil)
 }
 
-// IgnoreDevice dismisses a pending device permanently (as the web GUI's "Ignore").
+// IgnoreDevice permanently ignores a pending device (web GUI "Ignore").
 func (n *Node) IgnoreDevice(id string) error {
 	devID, err := protocol.DeviceIDFromString(id)
 	if err != nil {
 		return err
 	}
-	p := n.cache.pending()[id]
-	n.cache.removePending(id)
-	return n.modify(func(c *config.Configuration) error {
+	m, _, err := n.runningModel()
+	if err != nil {
+		return err
+	}
+	pending, _ := m.PendingDevices()
+	p := pending[devID]
+	if err := n.modify(func(c *config.Configuration) error {
 		c.IgnoredDevices = append(c.IgnoredDevices, config.ObservedDevice{
 			Time: time.Now(), ID: devID, Name: p.Name, Address: p.Address,
 		})
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	return m.DismissPendingDevice(devID)
+}
+
+// DismissPendingDevice forgets a pending device request; it reappears if the
+// device connects again (DELETE /rest/cluster/pending/devices).
+func (n *Node) DismissPendingDevice(id string) error {
+	devID, err := protocol.DeviceIDFromString(id)
+	if err != nil {
+		return err
+	}
+	m, _, err := n.runningModel()
+	if err != nil {
+		return err
+	}
+	return m.DismissPendingDevice(devID)
+}
+
+// DismissPendingFolder forgets a folder offer from one device, or from all
+// devices when deviceID is empty (DELETE /rest/cluster/pending/folders).
+func (n *Node) DismissPendingFolder(folderID, deviceID string) error {
+	devID := protocol.EmptyDeviceID
+	if deviceID != "" {
+		var err error
+		if devID, err = protocol.DeviceIDFromString(deviceID); err != nil {
+			return err
+		}
+	}
+	m, _, err := n.runningModel()
+	if err != nil {
+		return err
+	}
+	return m.DismissPendingFolder(devID, folderID)
 }
 
 // IgnoreFolder dismisses a folder offered by a device.
@@ -241,4 +278,93 @@ func (n *Node) SetOptionsJSON(optionsJSON string) error {
 	return n.modify(func(c *config.Configuration) error {
 		return json.Unmarshal([]byte(optionsJSON), &c.Options)
 	})
+}
+
+// FolderVersionsJSON mirrors GET /rest/folder/versions: archived versions
+// per file path for folders with versioning enabled.
+func (n *Node) FolderVersionsJSON(folder string) (string, error) {
+	m, _, err := n.runningModel()
+	if err != nil {
+		return "", err
+	}
+	versions, err := m.GetFolderVersions(folder)
+	if err != nil {
+		return "", err
+	}
+	return marshal(versions)
+}
+
+// RestoreVersionsJSON mirrors POST /rest/folder/versions. The input maps
+// file paths to the versionTime to restore; the result maps paths to errors.
+func (n *Node) RestoreVersionsJSON(folder, versionsJSON string) (string, error) {
+	m, _, err := n.runningModel()
+	if err != nil {
+		return "", err
+	}
+	var versions map[string]time.Time
+	if err := json.Unmarshal([]byte(versionsJSON), &versions); err != nil {
+		return "", fmt.Errorf("versions: %w", err)
+	}
+	failed, err := m.RestoreFolderVersions(folder, versions)
+	if err != nil {
+		return "", err
+	}
+	out := make(map[string]string, len(failed))
+	for path, e := range failed {
+		out[path] = e.Error()
+	}
+	return marshal(out)
+}
+
+// IgnoresJSON mirrors GET /rest/db/ignores: {"ignore": [...], "expanded": [...]}.
+func (n *Node) IgnoresJSON(folder string) (string, error) {
+	m, _, err := n.runningModel()
+	if err != nil {
+		return "", err
+	}
+	lines, expanded, err := m.LoadIgnores(folder)
+	if err != nil {
+		return "", err
+	}
+	if lines == nil {
+		lines = []string{}
+	}
+	if expanded == nil {
+		expanded = []string{}
+	}
+	return marshal(map[string]any{"ignore": lines, "expanded": expanded})
+}
+
+// SetIgnoresJSON mirrors POST /rest/db/ignores with a JSON array of lines.
+func (n *Node) SetIgnoresJSON(folder, linesJSON string) error {
+	app, _, err := n.running()
+	if err != nil {
+		return err
+	}
+	var lines []string
+	if err := json.Unmarshal([]byte(linesJSON), &lines); err != nil {
+		return fmt.Errorf("ignores: %w", err)
+	}
+	return app.Internals.SetIgnores(folder, lines)
+}
+
+// Override makes a send-only folder's local state authoritative
+// (POST /rest/db/override).
+func (n *Node) Override(folder string) error {
+	m, _, err := n.runningModel()
+	if err != nil {
+		return err
+	}
+	m.Override(folder)
+	return nil
+}
+
+// Revert discards local changes in a receive-only folder (POST /rest/db/revert).
+func (n *Node) Revert(folder string) error {
+	m, _, err := n.runningModel()
+	if err != nil {
+		return err
+	}
+	m.Revert(folder)
+	return nil
 }

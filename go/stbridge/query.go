@@ -1,43 +1,24 @@
 package stbridge
 
 import (
+	"errors"
 	"time"
+
+	"github.com/syncthing/syncthing/lib/model"
 
 	"github.com/syncthing/syncthing/lib/protocol"
 )
 
-// ConnectionsJSON mirrors GET /rest/system/connections. Per-device byte
-// counters aren't reachable from outside the model, so only totals carry
-// byte counts.
+// ConnectionsJSON mirrors GET /rest/system/connections.
 func (n *Node) ConnectionsJSON() (string, error) {
-	app, cfg, err := n.running()
+	m, _, err := n.runningModel()
 	if err != nil {
 		return "", err
 	}
-	conns := map[string]any{}
-	for id, dev := range cfg.Devices() {
-		if id == n.myID {
-			continue
-		}
-		ci, _ := n.cache.connection(id.String())
-		connected := app.Internals.IsConnectedTo(id)
-		entry := map[string]any{
-			"connected": connected,
-			"paused":    dev.Paused,
-		}
-		if connected {
-			entry["address"] = ci.Address
-			entry["clientVersion"] = ci.ClientVersion
-			entry["type"] = ci.Type
-			entry["startedAt"] = ci.StartedAt
-		}
-		conns[id.String()] = entry
-	}
+	res := m.ConnectionStats()
 	in, out := protocol.TotalInOut()
-	return marshal(map[string]any{
-		"connections": conns,
-		"total":       map[string]any{"inBytesTotal": in, "outBytesTotal": out, "at": time.Now()},
-	})
+	res["total"] = map[string]any{"inBytesTotal": in, "outBytesTotal": out, "at": time.Now()}
+	return marshal(res)
 }
 
 // FoldersJSON mirrors GET /rest/config/folders.
@@ -76,21 +57,19 @@ func (n *Node) DefaultDeviceJSON() (string, error) {
 	return marshal(cfg.DefaultDevice())
 }
 
-// FolderStatusJSON mirrors GET /rest/db/status. Uses the latest
-// FolderSummary event when available, otherwise computes from the database.
+// FolderStatusJSON mirrors GET /rest/db/status.
 func (n *Node) FolderStatusJSON(folder string) (string, error) {
-	app, _, err := n.running()
+	n.mu.Lock()
+	summary := n.summary
+	n.mu.Unlock()
+	if summary == nil {
+		return "", errors.New("syncthing is not running")
+	}
+	s, err := summary.Summary(folder)
 	if err != nil {
 		return "", err
 	}
-	if s, ok := n.cache.summary(folder); ok {
-		return marshal(s)
-	}
-	summary, err := folderSummary(app, folder, n.cache)
-	if err != nil {
-		return "", err
-	}
-	return marshal(summary)
+	return marshal(s)
 }
 
 func completionMap(pct float64, globalBytes, needBytes int64, globalItems, needItems, needDeletes int, remoteState string) map[string]any {
@@ -187,9 +166,20 @@ func (n *Node) NeedJSON(folder string, page, perPage int) (string, error) {
 	})
 }
 
-// FolderErrorsJSON mirrors GET /rest/folder/errors (from FolderErrors events).
+// FolderErrorsJSON mirrors GET /rest/folder/errors.
 func (n *Node) FolderErrorsJSON(folder string) (string, error) {
-	return marshal(map[string]any{"folder": folder, "errors": n.cache.errorsFor(folder)})
+	m, _, err := n.runningModel()
+	if err != nil {
+		return "", err
+	}
+	errs, err := m.FolderErrors(folder)
+	if err != nil {
+		return "", err
+	}
+	if errs == nil {
+		errs = []model.FileError{}
+	}
+	return marshal(map[string]any{"folder": folder, "errors": errs})
 }
 
 // DeviceStatsJSON mirrors GET /rest/stats/device.
@@ -209,30 +199,33 @@ func (n *Node) DeviceStatsJSON() (string, error) {
 	return marshal(out)
 }
 
-// FolderStatsJSON mirrors GET /rest/stats/folder (last scan only).
+// FolderStatsJSON mirrors GET /rest/stats/folder.
 func (n *Node) FolderStatsJSON() (string, error) {
-	out := map[string]any{}
-	for id, t := range n.cache.scanTimes() {
-		out[id] = map[string]any{"lastScan": t}
-	}
-	return marshal(out)
-}
-
-// PendingDevicesJSON mirrors GET /rest/cluster/pending/devices for devices
-// seen since the node started.
-func (n *Node) PendingDevicesJSON() (string, error) {
-	_, cfg, err := n.running()
+	m, _, err := n.runningModel()
 	if err != nil {
 		return "", err
 	}
-	out := map[string]pendingDevice{}
-	for id, p := range n.cache.pending() {
-		if devID, err := protocol.DeviceIDFromString(id); err == nil {
-			if _, known := cfg.Device(devID); known {
-				continue
-			}
-		}
-		out[id] = p
+	stats, err := m.FolderStatistics()
+	if err != nil {
+		return "", err
+	}
+	return marshal(stats)
+}
+
+// PendingDevicesJSON mirrors GET /rest/cluster/pending/devices (persisted
+// by Syncthing, so it includes attempts made while the app wasn't running).
+func (n *Node) PendingDevicesJSON() (string, error) {
+	m, _, err := n.runningModel()
+	if err != nil {
+		return "", err
+	}
+	pending, err := m.PendingDevices()
+	if err != nil {
+		return "", err
+	}
+	out := make(map[string]any, len(pending))
+	for id, p := range pending {
+		out[id.String()] = p
 	}
 	return marshal(out)
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/syncthing/syncthing/lib/config"
 	"github.com/syncthing/syncthing/lib/events"
 	"github.com/syncthing/syncthing/lib/locations"
+	"github.com/syncthing/syncthing/lib/model"
 	"github.com/syncthing/syncthing/lib/protocol"
 	"github.com/syncthing/syncthing/lib/svcutil"
 	"github.com/syncthing/syncthing/lib/syncthing"
@@ -52,9 +53,10 @@ type Node struct {
 	app       *syncthing.App
 	evLogger  events.Logger
 	sub       events.BufferedSubscription
+	model     model.Model
+	summary   model.FolderSummaryService
 	startedAt time.Time
 
-	cache *eventCache
 }
 
 // NewNode prepares a node whose config, keys and database live under
@@ -86,7 +88,6 @@ func NewNode(configDir, dataDir, folderRoot string) (*Node, error) {
 		defaultFolder: folderRoot,
 		cert:          cert,
 		myID:          protocol.NewDeviceID(cert.Certificate[0]),
-		cache:         newEventCache(),
 	}, nil
 }
 
@@ -140,8 +141,6 @@ func (n *Node) Start(deviceName string) error {
 
 	// Subscribe before starting so no event is missed.
 	sub := events.NewBufferedSubscription(evLogger.Subscribe(defaultEventMask), eventBufferSize)
-	n.cache.reset()
-	n.cache.follow(ctx, evLogger)
 
 	sdb, err := syncthing.OpenDatabase(filepath.Join(n.dataDir, "index-v2"), 15*30*24*time.Hour)
 	if err != nil {
@@ -161,13 +160,26 @@ func (n *Node) Start(deviceName string) error {
 		return fmt.Errorf("start: %w", err)
 	}
 
-	startSummaryService(ctx, app, cfg, evLogger, n.myID, n.cache)
+	m, err := modelOf(app)
+	if err != nil {
+		app.Stop(svcutil.ExitError)
+		app.Wait()
+		cancel()
+		return err
+	}
+	// Syncthing only starts the folder summary service (FolderSummary and
+	// FolderCompletion events) together with its web GUI; run it ourselves.
+	summary := model.NewFolderSummaryService(cfg, m, n.myID, evLogger)
+	early.Add(summary)
+
 
 	n.cancel = cancel
 	n.cfg = cfg
 	n.app = app
 	n.evLogger = evLogger
 	n.sub = sub
+	n.model = m
+	n.summary = summary
 	n.startedAt = time.Now()
 	return nil
 }
@@ -176,7 +188,7 @@ func (n *Node) Start(deviceName string) error {
 func (n *Node) Stop() {
 	n.mu.Lock()
 	app, cancel := n.app, n.cancel
-	n.app, n.cancel, n.cfg, n.sub, n.evLogger = nil, nil, nil, nil, nil
+	n.app, n.cancel, n.cfg, n.sub, n.evLogger, n.model, n.summary = nil, nil, nil, nil, nil, nil, nil
 	n.mu.Unlock()
 	if app == nil {
 		return
@@ -230,6 +242,15 @@ func (n *Node) running() (*syncthing.App, config.Wrapper, error) {
 		return nil, nil, errors.New("syncthing is not running")
 	}
 	return n.app, n.cfg, nil
+}
+
+func (n *Node) runningModel() (model.Model, config.Wrapper, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.app == nil {
+		return nil, nil, errors.New("syncthing is not running")
+	}
+	return n.model, n.cfg, nil
 }
 
 func marshal(v any) (string, error) {
