@@ -1,120 +1,104 @@
 # SuperSynch
 
-A native iOS/iPadOS remote control for [Syncthing](https://syncthing.net). SuperSynch does **not** run Syncthing itself. It connects to Syncthing daemons running elsewhere (a NAS, home server, Raspberry Pi or VPS) through their REST API.
+SuperSynch runs **[Syncthing](https://syncthing.net) on your iPhone and iPad**, so your phone becomes a Syncthing device of its own. It syncs folders directly with Syncthing on your Mac (or any other device), peer to peer and end-to-end encrypted. No server is involved, and nothing on your Mac has to be exposed.
 
-- iOS / iPadOS 17+, SwiftUI, Swift 6, no third-party runtime dependencies.
-- One shared codebase. iPhone uses a `NavigationStack`; iPad uses a three-column `NavigationSplitView`. Everything else, from the networking client to the models, view models and screens, is the same code (≈98% of lines).
-- Supports multiple servers, with live updates through Syncthing's event API.
+- Embeds Syncthing **v2.1.5** (compiled for iOS with gomobile) behind a small Go bridge.
+- Native SwiftUI on iOS/iPadOS 17+, Swift 6. iPhone uses a `NavigationStack`; iPad uses a three-column `NavigationSplitView`. Everything else is shared code.
+- No analytics. Syncthing's usage reporting, crash reporting, auto-upgrade and web GUI are all turned off.
 
-## Features (phase 1)
+## Features
 
 | Area | What you get |
 |---|---|
-| Servers | Add, edit, remove and reorder servers (name, URL, API key). Switch between them from the toolbar. Paste a `{"name","url","apiKey"}` JSON configuration. |
-| Dashboard | Device ID, version, platform, uptime, connection state, total download/upload rates, connected devices, folders needing attention, system errors (with Clear). |
-| Folders | Sync state and completion bar. Detail view shows state, global/local file, directory and byte counts, out-of-sync items (`/rest/db/need`), failed items, last scan and per-device completion. Actions: **Rescan**, **Pause/Resume**. |
-| Devices | Connected/disconnected/paused, address, completion, per-device transfer rates, last seen, shared folders. Actions: **Pause/Resume**. |
-| Pending | Devices and folders waiting for approval: **Add** (built on the server's own config defaults) or **Dismiss**. |
-| Live updates | Long-poll `GET /rest/events`, with timed polling as a fallback. Updates pause in the background and resume in the foreground. |
-| Controls | Pause all, Resume all, Rescan all, **Restart** and **Shut down** (both require confirmation). |
-| UX | Colour and icon per sync state, pull-to-refresh, empty states, connection-error banners, Dark Mode, Dynamic Type, Reduce Motion, iPad keyboard shortcuts. |
+| Pairing | This device's ID as a QR code (copy/share). Add your Mac by pasting or **scanning** its ID; addresses can be automatic (discovery) or manual (`tcp://macbook.local:22000`). |
+| Folders | Create folders, accept folders your Mac offers, choose which devices to share with, send-receive / send-only / receive-only, pause/resume, rescan, remove. Detail view shows sync state, counts, out-of-sync items, failed items and per-device completion. |
+| Files | Synced folders live in **Files › On My iPhone › SuperSynch** and are usable from any app. There's also an in-app browser with Quick Look preview and sharing. You can also sync **into a folder you pick elsewhere** (security-scoped bookmark; see limitations). |
+| Devices | Connection state, address, completion, last seen, shared folders; pause/resume, edit, remove. |
+| Pending | Devices that try to connect and folders offered to you: **Add** or **Ignore**. |
+| Live status | Syncthing's event stream drives the UI in real time, including transfer rates and sync progress. |
+| Background | Keeps syncing for a short while after you leave the app, then iOS-scheduled background syncs (see below). |
+| UX | Colour and icon per sync state, pull-to-refresh, empty states, error banners, Dark Mode, Dynamic Type, Reduce Motion, iPad keyboard shortcuts. |
 
-Keyboard shortcuts (iPad with a hardware keyboard):
-- ⌘R — Refresh
-- ⇧⌘R — Rescan all folders
-- ⌘1 … ⌘4 — Dashboard / Folders / Devices / Pending
-- ⇧⌘S — Rescan (on a folder's detail screen)
-- ⇧⌘P — Pause/Resume (on a folder's or device's detail screen)
-- ⌘N — Add server
+## Pairing with your Mac
 
-## Connecting to Syncthing
+1. **On the iPhone**, open SuperSynch → **This Device** → *Show Device ID*.
+2. **On the Mac**, open Syncthing's GUI (`http://127.0.0.1:8384`) → **Add Remote Device**. Paste the ID; the Mac's GUI can also scan the QR code from a screenshot. Give it a name.
+3. **On the iPhone**, go to **Devices → +** and paste or scan the Mac's ID (Mac: *Actions → Show ID*).
+4. Share folders:
+   - **From the Mac:** edit a folder → *Sharing* → tick the iPhone. It appears on the phone under **Pending Requests**; tap *Add…* to accept it into SuperSynch.
+   - **From the phone:** **Folders → +**, tick the Mac under *Share With*. Accept it on the Mac.
 
-### 1. Make the GUI reachable
-Syncthing's GUI/REST API listens on `127.0.0.1:8384` by default. To reach it from your phone, set the GUI listen address to `0.0.0.0:8384` (or a specific LAN or VPN interface). You can do this in the web GUI under **Actions → Settings → GUI → GUI Listen Address**. Setting a GUI username and password is recommended; the API key works independently of them.
+If the two can't find each other on your network, set the Mac's address manually when adding it on the phone (*Connection → Manual*, e.g. `tcp://192.168.1.20:22000`). Global discovery and relays are on by default, so devices also find each other across networks.
 
-### 2. Get the API key
-In the Syncthing web GUI, open **Actions → Settings → General**. The **API Key** field is there; copy it, or click *Generate* to rotate it. You can also run `syncthing cli config gui apikey get` on the host.
+## How iOS limits syncing (important)
 
-### 3. Add the server in SuperSynch
-Enter a name (optional), the URL including the scheme and port (e.g. `https://192.168.1.10:8384` or `http://homeserver.local:8384`), and the API key. If you leave out the scheme, `https://` is assumed. A URL path prefix is kept, e.g. `https://example.com/syncthing/` behind a reverse proxy.
+iOS doesn't let apps run continuously in the background, so SuperSynch can't stay in sync with your Mac around the clock the way two desktops do. It syncs:
 
-When you tap **Save**, SuperSynch checks the connection in this order:
-1. `GET /rest/noauth/health` (no key)
-2. `GET /rest/system/status`
-3. `GET /rest/system/version`
+1. **While the app is open.** This is the reliable way to sync.
+2. **For ~30 seconds after you leave it.** It finishes in-progress transfers, then shuts Syncthing down cleanly.
+3. **When iOS grants background time.** It uses a short app-refresh window, and a longer processing window that iOS typically grants while charging on Wi-Fi. iOS decides when these happen.
 
-The server is saved only if all three succeed. Otherwise you'll see a specific message, for example a rejected API key, an unreachable host or port, a timeout, being offline, or plain HTTP being refused for a remote host.
+When the phone isn't running, your Mac queues the changes, and they sync the next time the app runs.
 
-### Self-signed certificates (trust on first use)
-Syncthing's HTTPS GUI uses a self-signed certificate by default, which iOS won't trust. When SuperSynch meets a certificate the system doesn't trust:
+**Local discovery:** iOS requires a special Apple entitlement (multicast networking) for apps to send the LAN broadcasts that Syncthing's local discovery uses. Until that entitlement is granted, use global discovery (on by default) or a manual address.
 
-1. It shows the certificate's host, subject and **SHA-256 fingerprint**.
-2. You compare that fingerprint with the one on the server. In Syncthing's config directory, run:
-   ```sh
-   openssl x509 -noout -fingerprint -sha256 -in https-cert.pem
-   ```
-3. If you tap **Trust**, the fingerprint is pinned **for that server only**. From then on, a connection is accepted only if the server presents exactly that certificate.
+**Folders outside the app:** syncing into a folder picked from another location works for local storage such as "On My iPhone" folders of other apps. Cloud-backed locations like iCloud Drive can evict downloaded copies or coordinate writes in ways Syncthing doesn't expect, so they're not recommended.
 
-If the certificate later changes, SuperSynch refuses the connection. It shows a **Certificate Changed** warning and asks you to review the new certificate. TLS validation is never disabled. Certificates signed by a CA the system trusts (e.g. Let's Encrypt behind a reverse proxy) are accepted normally.
+## Architecture
 
-### Plain HTTP
-App Transport Security allows plain `http://` only for local-network hosts (`.local` names, unqualified names and IP addresses). Remote servers must use HTTPS.
-
-## Privacy & security
-- API keys are stored only in the iOS Keychain (`AfterFirstUnlockThisDeviceOnly`, not synced). Non-secret settings (server name, URL, pinned fingerprint) are stored in `UserDefaults`.
-- API keys are never logged.
-- There's no analytics or telemetry. The app only talks to the servers you add.
+```
+go/stbridge/          Go bridge around Syncthing's lib/syncthing (App + Internals).
+                      Exposes a Node to Swift; data crosses as JSON shaped like
+                      Syncthing's REST API. Re-implements the folder-summary
+                      service (Syncthing only starts it with its web GUI).
+Frameworks/           Stbridge.xcframework (generated; scripts/build-bridge.sh)
+SyncthingKit/         Shared Swift core: SyncEngine (node lifecycle),
+                      EmbeddedSyncthingClient (async wrapper), models, event
+                      reducer, SyncSession, AppModel
+SuperSynch/           SwiftUI app (views only) + background-sync scheduling
+```
 
 ## Building & testing
 
-Requirements: macOS with Xcode 16+ (developed on Xcode 27) and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
-
-The Xcode project is generated from `project.yml` and isn't committed:
+Requirements: macOS with Xcode 16+ (developed on Xcode 27), Go 1.26+, and XcodeGen (`brew install xcodegen`). gomobile is installed automatically by the build script.
 
 ```sh
-xcodegen generate
-open SuperSynch.xcodeproj            # optional
-```
-
-Build and test headlessly:
-
-```sh
+scripts/build-bridge.sh          # Go → Frameworks/Stbridge.xcframework (~30 s; skipped if up to date)
+xcodegen generate                # project.yml → SuperSynch.xcodeproj (not committed)
 xcodebuild -scheme SuperSynch -destination 'platform=iOS Simulator,name=iPhone 15' test
-# or, which regenerates the project and filters the output:
-scripts/test.sh                      # default: "iPhone 15"
-scripts/test.sh "iPad Pro 11-inch (M5)"
+# or all of the above, with filtered output:
+scripts/test.sh                  # default device "iPhone 15"
 ```
 
-If you don't have an "iPhone 15" simulator, create one (`xcrun simctl create "iPhone 15" com.apple.CoreSimulator.SimDeviceType.iPhone-15 <runtime-id>`) or pass another device name.
+The tests run the **real embedded Syncthing inside the simulator** (start/stop/restart, folder management, live summaries), plus unit tests for decoding, the event reducer and the session.
+
+### End-to-end sync test (optional)
+This syncs files both ways between the embedded node and a separate Syncthing standing in for your Mac. It uses its own ports (22001/8386) and never touches a Syncthing you already run:
+
+```sh
+scripts/e2e-peer.sh /path/to/syncthing            # starts the throwaway peer
+TEST_RUNNER_PEER_URL=http://127.0.0.1:8386 TEST_RUNNER_PEER_API_KEY=e2e-key scripts/test.sh
+(cd go && PEER_URL=http://127.0.0.1:8386 PEER_API_KEY=e2e-key go test -tags noassets ./stbridge/)
+```
+
+> **Simulator note:** the simulator shares your Mac's network. When you run the app (not the tests) in the simulator, its Syncthing listens on the default port 22000, which conflicts with a Syncthing already running on the Mac. Prefer a real device or demo mode for UI work.
 
 ### Demo mode
-Launch with `-DemoMode` to use built-in sample data with no network access. This is handy for UI work and screenshots:
-
+`-DemoMode` runs the UI against sample data without starting Syncthing:
 ```sh
 xcrun simctl launch booted xyz.santacroce.SuperSynch -DemoMode -DemoSection folders -DemoFolder photos
 ```
 
-### Integration tests (optional)
-`LiveIntegrationTests` runs against a real Syncthing. It is skipped unless `SYNCTHING_URL` and `SYNCTHING_API_KEY` are set; xcodebuild forwards `TEST_RUNNER_`-prefixed variables to the test runner. To run it against a throwaway instance:
+## Decisions & assumptions
+- **Embedded engine with a custom Go bridge** (not the local REST API). Remote control of other Syncthing instances was dropped.
+- Syncthing is pinned by commit (`v2.1.5`). Its `v2` tags don't use a `/v2` module path, so Go resolves it as a pseudo-version. It's built with `-tags noassets`, since the web GUI isn't needed.
+- Storage locations:
+  - Folders: `Documents/` by default, which is why they appear in the Files app.
+  - Config, certificate and key: `Application Support/Syncthing/config`. These are backed up, so a restored phone keeps its device ID.
+  - Index database: `Application Support/Syncthing/data`, excluded from backup because it can be rebuilt.
+- Dismissing a pending request **ignores** it in config, like the web GUI's *Ignore*.
+- Bundle ID: `xyz.santacroce.SuperSynch`.
+- Syncthing is MPL-2.0. The app links it unmodified; the source is at github.com/syncthing/syncthing.
 
-```sh
-syncthing generate --home=/tmp/st
-syncthing serve --home=/tmp/st --no-browser --gui-address=https://127.0.0.1:8385 --gui-apikey=testkey123 &
-TEST_RUNNER_SYNCTHING_URL=https://127.0.0.1:8385 TEST_RUNNER_SYNCTHING_API_KEY=testkey123 \
-  xcodebuild -scheme SuperSynch -destination 'platform=iOS Simulator,name=iPhone 15' test
-```
-
-This was last verified against Syncthing **v2.1.5**.
-
-## Assumptions & decisions
-- **Bundle ID** `xyz.santacroce.SuperSynch`. Change it in `project.yml`.
-- **Pending requests** are part of phase 1, since they're in the MVP feature list. Accepting a folder asks for its path on the server, pre-filled from the server's default folder path.
-- **Folder pause/resume** uses `PATCH /rest/config/folders/{id}` with `{"paused": …}`. **Device pause/resume** and pause/resume-all use `POST /rest/system/pause|resume`.
-- **Config** is read from `/rest/config/*`. The deprecated `/rest/system/config` is never used.
-- **Transfer rates** are computed from `/rest/system/connections` byte-counter deltas, polled every 10 s, because events don't carry rates.
-- `/rest/db/status` and `/rest/db/need` are expensive on the server. Status is loaded once and then kept current by `FolderSummary` events; "out of sync" items load only when you open that screen.
-- Only the selected server's session runs, and only while the app is in the foreground.
-- **Reset** (database reset) isn't exposed in phase 1.
-
-## Roadmap (phase 2)
-Versioning and restore (`/rest/folder/versions`), editing folder and device config, widgets, adding a server by QR code (the payload format `{"name","url","apiKey"}` is already supported via paste), and ignore patterns.
+## Roadmap
+File versioning and restore, ignore patterns, conflict resolution UI, selective/on-demand sync (download individual files via the bridge's block API), a File Provider extension, widgets, and requesting the multicast entitlement for local discovery.
