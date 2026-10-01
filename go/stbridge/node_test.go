@@ -20,15 +20,14 @@ func newTestNode(t *testing.T) (*Node, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Keep tests local and off the default port (a real Syncthing may be
+	// running on this machine): no discovery/relays, loopback listener.
+	n.SetStartupOptionsJSON(`{"listenAddresses":["tcp://127.0.0.1:22100"],"globalAnnounceEnabled":false,
+		"localAnnounceEnabled":false,"relaysEnabled":false,"natEnabled":false}`)
 	if err := n.Start("test-phone"); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(n.Stop)
-	// Keep tests local: no discovery/relays, loopback listener.
-	if err := n.SetOptionsJSON(`{"listenAddresses":["tcp://127.0.0.1:22100"],"globalAnnounceEnabled":false,
-		"localAnnounceEnabled":false,"relaysEnabled":false,"natEnabled":false}`); err != nil {
-		t.Fatal(err)
-	}
 	return n, dir
 }
 

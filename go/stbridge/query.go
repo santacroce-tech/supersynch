@@ -86,42 +86,11 @@ func (n *Node) FolderStatusJSON(folder string) (string, error) {
 	if s, ok := n.cache.summary(folder); ok {
 		return marshal(s)
 	}
-	state, changed, err := app.Internals.FolderState(folder)
+	summary, err := folderSummary(app, folder, n.cache)
 	if err != nil {
 		return "", err
 	}
-	global, err := app.Internals.GlobalSize(folder)
-	if err != nil {
-		return "", err
-	}
-	local, err := app.Internals.LocalSize(folder)
-	if err != nil {
-		return "", err
-	}
-	need, err := app.Internals.NeedSize(folder, protocol.LocalDeviceID)
-	if err != nil {
-		return "", err
-	}
-	return marshal(map[string]any{
-		"state":             state,
-		"stateChanged":      changed,
-		"globalFiles":       global.Files,
-		"globalDirectories": global.Directories,
-		"globalDeleted":     global.Deleted,
-		"globalBytes":       global.Bytes,
-		"globalTotalItems":  global.Files + global.Directories + global.Symlinks,
-		"localFiles":        local.Files,
-		"localDirectories":  local.Directories,
-		"localDeleted":      local.Deleted,
-		"localBytes":        local.Bytes,
-		"localTotalItems":   local.Files + local.Directories + local.Symlinks,
-		"needFiles":         need.Files,
-		"needDirectories":   need.Directories,
-		"needDeletes":       need.Deleted,
-		"needBytes":         need.Bytes,
-		"needTotalItems":    need.Files + need.Directories + need.Symlinks,
-		"inSyncBytes":       global.Bytes - need.Bytes,
-	})
+	return marshal(summary)
 }
 
 func completionMap(pct float64, globalBytes, needBytes int64, globalItems, needItems, needDeletes int, remoteState string) map[string]any {

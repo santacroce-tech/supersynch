@@ -40,6 +40,10 @@ type Node struct {
 	dataDir       string
 	defaultFolder string
 
+	// Options applied before every start (tests use it to stay off the
+	// default ports); JSON in the same shape as SetOptionsJSON.
+	startupOptions string
+
 	mu        sync.Mutex
 	cert      tls.Certificate
 	myID      protocol.DeviceID
@@ -88,6 +92,14 @@ func NewNode(configDir, dataDir, folderRoot string) (*Node, error) {
 
 // DeviceID is this node's Syncthing device ID.
 func (n *Node) DeviceID() string { return n.myID.String() }
+
+// SetStartupOptionsJSON sets options applied on each Start before Syncthing
+// begins listening. Must be called while stopped.
+func (n *Node) SetStartupOptionsJSON(optionsJSON string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.startupOptions = optionsJSON
+}
 
 // IsRunning reports whether Start has completed and Stop hasn't been called.
 func (n *Node) IsRunning() bool {
@@ -149,6 +161,8 @@ func (n *Node) Start(deviceName string) error {
 		return fmt.Errorf("start: %w", err)
 	}
 
+	startSummaryService(ctx, app, cfg, evLogger, n.myID, n.cache)
+
 	n.cancel = cancel
 	n.cfg = cfg
 	n.app = app
@@ -176,7 +190,11 @@ func (n *Node) Stop() {
 // privacy-respecting mobile node. The web GUI/REST server is disabled (the
 // app talks to Syncthing in-process) and telemetry/upgrades are off.
 func (n *Node) applyMobileDefaults(cfg config.Wrapper, deviceName string, firstRun bool) error {
+	var optErr error
 	w, err := cfg.Modify(func(c *config.Configuration) {
+		if n.startupOptions != "" {
+			optErr = json.Unmarshal([]byte(n.startupOptions), &c.Options)
+		}
 		c.GUI.Enabled = false
 		c.Options.StartBrowser = false
 		c.Options.URAccepted = -1
@@ -197,6 +215,9 @@ func (n *Node) applyMobileDefaults(cfg config.Wrapper, deviceName string, firstR
 	})
 	if err != nil {
 		return err
+	}
+	if optErr != nil {
+		return fmt.Errorf("startup options: %w", optErr)
 	}
 	w.Wait()
 	return cfg.Save()
