@@ -88,30 +88,6 @@ public struct SystemVersion: Decodable, Sendable, Equatable {
     }
 }
 
-/// One entry of `GET /rest/system/error`.
-public struct SystemError: Decodable, Sendable, Equatable, Hashable {
-    public var when: Date?
-    public var message: String
-
-    public init(when: Date?, message: String) { self.when = when; self.message = message }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: AnyKey.self)
-        when = c.lenientDate(AnyKey("when"))
-        message = c.lenient(AnyKey("message"), "")
-    }
-}
-
-/// `GET /rest/system/error`
-struct SystemErrorsResponse: Decodable {
-    var errors: [SystemError]
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: AnyKey.self)
-        // `errors` is null when there are none.
-        errors = c.lenient(AnyKey("errors"), [])
-    }
-}
-
 /// One entry of `GET /rest/system/connections` → `connections`.
 public struct ConnectionInfo: Decodable, Sendable, Equatable {
     public var connected: Bool

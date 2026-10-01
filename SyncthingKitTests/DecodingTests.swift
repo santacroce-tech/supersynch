@@ -110,14 +110,6 @@ final class DecodingTests: XCTestCase {
         XCTAssertEqual(n.all.count, 2)
     }
 
-    func testSystemErrors() throws {
-        let r = try Fixture.decode(SystemErrorsResponse.self, "system-error")
-        XCTAssertEqual(r.errors.first?.message, "This is an error string")
-        XCTAssertNotNil(r.errors.first?.when)
-        let empty = try JSONDecoder().decode(SystemErrorsResponse.self, from: Data(#"{"errors": null}"#.utf8))
-        XCTAssertEqual(empty.errors, [])
-    }
-
     func testFolderErrors() throws {
         let r = try Fixture.decode(FolderErrorsResponse.self, "folder-errors")
         XCTAssertEqual(r.folder, "nnhic-sxuae")

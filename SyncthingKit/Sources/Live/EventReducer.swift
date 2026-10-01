@@ -1,7 +1,7 @@
 import Foundation
 
 /// Follow-up work an event implies but cannot perform itself (the reducer is
-/// pure). `ServerSession` executes these, coalescing duplicates.
+/// pure). `SyncSession` executes these, coalescing duplicates.
 public enum EventEffect: Hashable, Sendable {
     case refreshConfig
     case refreshPending
@@ -11,9 +11,9 @@ public enum EventEffect: Hashable, Sendable {
     case resync
 }
 
-/// Pure reducer from Syncthing events to `ServerState`. Shared by all idioms.
+/// Pure reducer from Syncthing events to `NodeState`. Shared by all idioms.
 public enum EventReducer {
-    public static func apply(_ events: [SyncthingEvent], to state: inout ServerState) -> Set<EventEffect> {
+    public static func apply(_ events: [SyncthingEvent], to state: inout NodeState) -> Set<EventEffect> {
         var effects = Set<EventEffect>()
         for event in events.sorted(by: { $0.id < $1.id }) {
             // Replays of already-applied events are ignored.
@@ -27,7 +27,7 @@ public enum EventReducer {
         return effects
     }
 
-    public static func apply(_ event: SyncthingEvent, to state: inout ServerState) -> Set<EventEffect> {
+    public static func apply(_ event: SyncthingEvent, to state: inout NodeState) -> Set<EventEffect> {
         switch event.payload {
         case let .stateChanged(folder, from, to):
             guard !folder.isEmpty else { return [] }
@@ -132,13 +132,13 @@ public enum EventReducer {
                           needItems: needItems, needDeletes: deletes, remoteState: "valid")
     }
 
-    private static func setFolderPaused(_ id: FolderID, _ paused: Bool, in state: inout ServerState) {
+    private static func setFolderPaused(_ id: FolderID, _ paused: Bool, in state: inout NodeState) {
         guard let index = state.folders.firstIndex(where: { $0.id == id }) else { return }
         state.folders[index].paused = paused
         if paused { state.scanProgress[id] = nil }
     }
 
-    private static func setDevicePaused(_ id: DeviceID, _ paused: Bool, in state: inout ServerState) {
+    private static func setDevicePaused(_ id: DeviceID, _ paused: Bool, in state: inout NodeState) {
         if let index = state.devices.firstIndex(where: { $0.deviceID == id }) {
             state.devices[index].paused = paused
         }

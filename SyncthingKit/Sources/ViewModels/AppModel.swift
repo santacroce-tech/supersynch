@@ -1,76 +1,62 @@
 import Foundation
 import Observation
 
-/// Root model: saved servers, the selected one, and one `ServerSession` per
-/// server. Only the selected session runs, and only while the app is active.
+/// Root model: the embedded Syncthing engine and the live session that
+/// follows it. In demo/preview mode there is no engine, only a mock session.
 @MainActor
 @Observable
 public final class AppModel {
-    public let store: ServerStore
-    public typealias ClientFactory = @Sendable (ServerEndpoint) -> SyncthingAPIClient
-
-    public var selectedServerID: UUID? {
-        didSet {
-            guard selectedServerID != oldValue else { return }
-            defaults.set(selectedServerID?.uuidString, forKey: selectionKey)
-            activateSelection(previous: oldValue)
-        }
-    }
+    public let engine: SyncEngine?
+    public let session: SyncSession
+    /// Set when the engine couldn't be created at all (e.g. disk full).
+    public let setupError: String?
 
     public private(set) var isActive = false
 
-    private var sessions: [UUID: ServerSession] = [:]
-    private let clientFactory: ClientFactory
-    private let defaults: UserDefaults
-    private let selectionKey = "selectedServer.v1"
-
-    public init(
-        store: ServerStore,
-        defaults: UserDefaults = .standard,
-        clientFactory: @escaping ClientFactory = { SyncthingHTTPClient(endpoint: $0) }
-    ) {
-        self.store = store
-        self.defaults = defaults
-        self.clientFactory = clientFactory
-        let saved = defaults.string(forKey: selectionKey).flatMap(UUID.init(uuidString:))
-        selectedServerID = saved.flatMap { store.server(id: $0) != nil ? $0 : nil } ?? store.servers.first?.id
+    public init(engine: SyncEngine) {
+        self.engine = engine
+        self.session = SyncSession(client: engine.client)
+        self.setupError = nil
     }
 
-    public var selectedSession: ServerSession? {
-        selectedServerID.flatMap(session(for:))
+    /// Without an engine (demo mode, previews, or a setup failure).
+    public init(session: SyncSession, setupError: String? = nil) {
+        self.engine = nil
+        self.session = session
+        self.setupError = setupError
     }
 
-    public func session(for id: UUID) -> ServerSession? {
-        if let existing = sessions[id] { return existing }
-        guard let server = store.server(id: id), let endpoint = store.endpoint(for: id) else { return nil }
-        let session = ServerSession(server: server, client: clientFactory(endpoint))
-        sessions[id] = session
-        return session
-    }
+    public var deviceID: DeviceID? { engine?.deviceID ?? session.state.myID }
 
-    /// Call from the scene-phase observer: live updates stop in the background.
-    public func setActive(_ active: Bool) {
+    /// Foreground: start the engine and follow it.
+    public func setActive(_ active: Bool) async {
         guard active != isActive else { return }
         isActive = active
-        if active { selectedSession?.start() } else { sessions.values.forEach { $0.stop() } }
+        if active {
+            await engine?.start()
+            if engine == nil || engine?.isRunning == true { session.start() }
+        }
+        // Going inactive is handled by the background coordinator, which
+        // lets sync finish before calling `suspend()`.
     }
 
-    /// Invalidate a server's session after its URL, key or pin changed.
-    public func serverDidChange(_ id: UUID) {
-        sessions[id]?.stop()
-        sessions[id] = nil
-        if id == selectedServerID, isActive { selectedSession?.start() }
+    /// Stops following and shuts the engine down (sockets closed, DB flushed).
+    public func suspend() async {
+        session.stop()
+        await engine?.stop()
     }
 
-    public func removeServer(_ id: UUID) {
-        sessions[id]?.stop()
-        sessions[id] = nil
-        store.remove(id: id)
-        if selectedServerID == id { selectedServerID = store.servers.first?.id }
-    }
-
-    private func activateSelection(previous: UUID?) {
-        if let previous { sessions[previous]?.stop() }
-        if isActive { selectedSession?.start() }
+    /// Starts the engine for a background sync window and waits until
+    /// everything is in sync or `deadline` passes. Returns whether it reached idle.
+    public func syncInBackground(until deadline: Date, settle: Duration = .seconds(5)) async -> Bool {
+        if engine?.isRunning != true { await engine?.start() }
+        session.start()
+        // Give peers time to connect and exchange indexes before trusting "idle".
+        try? await Task.sleep(for: settle)
+        while Date() < deadline {
+            if session.phase == .live, session.state.isSyncIdle, !session.state.folders.isEmpty { return true }
+            try? await Task.sleep(for: .seconds(2))
+        }
+        return false
     }
 }

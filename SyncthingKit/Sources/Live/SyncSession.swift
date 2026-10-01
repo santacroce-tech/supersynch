@@ -1,18 +1,16 @@
 import Foundation
 import Observation
 
-/// How the app is currently receiving data from a server.
+/// How the UI is currently receiving data from the embedded node.
 public enum ConnectionPhase: Equatable, Sendable {
     case idle
     case connecting
-    /// Event long-poll is healthy.
+    /// Event stream is healthy.
     case live
     /// Event stream dropped; data is refreshed by timed polling while retrying.
     case polling(SyncthingError)
-    /// Can't talk to the server at all (or not without user action).
+    /// The node can't be reached (e.g. not running).
     case failed(SyncthingError)
-    /// The user shut the Syncthing instance down.
-    case shutDown
 
     public var error: SyncthingError? {
         switch self {
@@ -30,14 +28,13 @@ extension SyncthingError {
     }
 }
 
-/// Live model of one Syncthing instance: owns the event long-poll and the
-/// polling fallback, and exposes every user action. Identical on all idioms.
+/// Live model of the local Syncthing node: follows its event stream (with a
+/// polling fallback) into `NodeState`, and exposes every user action.
+/// Identical on all idioms.
 @MainActor
 @Observable
-public final class ServerSession: Identifiable {
-    public let id: UUID
-    public private(set) var server: ServerConfig
-    public internal(set) var state = ServerState()
+public final class SyncSession {
+    public internal(set) var state = NodeState()
     public private(set) var phase: ConnectionPhase = .idle
     public private(set) var isRefreshing = false
     /// The most recent failed user action, for presentation as an alert.
@@ -55,60 +52,49 @@ public final class ServerSession: Identifiable {
         public var pollInterval: Duration = .seconds(10)
         /// Every n-th poll also refreshes slower-changing data.
         public var slowPollEvery = 3
-        public var eventTimeout = 60
-        public var maxBackoff: Double = 30
+        /// Long-poll timeout. Kept short so a stopped node releases its
+        /// blocked thread quickly.
+        public var eventTimeout = 20
+        public var maxBackoff: Double = 10
         public var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
 
         public init() {}
     }
 
-    public init(server: ServerConfig, client: SyncthingAPIClient, configuration: Configuration = .init(),
-                initialState: ServerState = .init()) {
-        self.id = server.id
-        self.state = initialState
-        self.server = server
+    public init(client: SyncthingAPIClient, configuration: Configuration = .init(), initialState: NodeState = .init()) {
         self.client = client
         self.configuration = configuration
+        self.state = initialState
     }
 
     // MARK: - Lifecycle
 
     public var isRunning: Bool { eventTask != nil }
 
-    /// Starts (or resumes) live updates. Safe to call repeatedly.
+    /// Starts following the node. Safe to call repeatedly.
     public func start() {
         guard eventTask == nil else { return }
-        if phase == .idle || phase == .shutDown || phase.error != nil { phase = .connecting }
+        if phase == .idle || phase.error != nil { phase = .connecting }
         needsResync = true
         eventTask = Task { [weak self] in await self?.runEventLoop() }
         pollTask = Task { [weak self] in await self?.runPollLoop() }
     }
 
-    /// Suspends live updates (e.g. when the app is backgrounded).
+    /// Stops following the node (keeps the last known state for display).
     public func stop() {
         eventTask?.cancel(); eventTask = nil
         pollTask?.cancel(); pollTask = nil
-        if phase != .shutDown { phase = .idle }
-    }
-
-    public func updateServer(_ server: ServerConfig) {
-        self.server = server
+        phase = .idle
     }
 
     /// User-initiated full reload (pull to refresh).
     public func refresh() async {
         do {
             try await fullRefresh()
-            if case .failed = phase { restartLoops() }
         } catch {
             let e = SyncthingError(error)
-            if e != .cancelled { phase = .failed(e) }
+            if e != .cancelled { actionError = e }
         }
-    }
-
-    private func restartLoops() {
-        stop()
-        start()
     }
 
     // MARK: - Loading
@@ -170,13 +156,13 @@ public final class ServerSession: Identifiable {
     }
 
     private func refreshSlowData() async {
-        if let errors = try? await client.systemErrors() { state.systemErrors = errors }
         if let stats = try? await client.deviceStats() { state.deviceStats = stats }
-        if let stats = try? await client.folderStats() { state.folderStats = stats }
+        if let stats = try? await client.folderStats() {
+            state.folderStats.merge(stats) { _, new in new }
+        }
     }
 
     private func refreshPending() async {
-        // Pending endpoints need Syncthing ≥ 1.13; failures are non-fatal.
         if let devices = try? await client.pendingDevices() { state.pendingDevices = devices }
         if let folders = try? await client.pendingFolders() { state.pendingFolders = folders }
     }
@@ -208,11 +194,11 @@ public final class ServerSession: Identifiable {
     // MARK: - Event loop
 
     private func runEventLoop() async {
-        var backoff: Double = 1
+        var backoff: Double = 0.5
         while !Task.isCancelled {
             do {
                 if needsResync {
-                    // Find the current event ID first so nothing that happens
+                    // Take the current event ID first so nothing that happens
                     // during the reload is missed, then reload everything.
                     let latest = try await client.events(since: 0, limit: 1, timeout: 1)
                     let cursor = latest.last?.id ?? 0
@@ -227,20 +213,13 @@ public final class ServerSession: Identifiable {
                 let effects = EventReducer.apply(events, to: &state)
                 if !events.isEmpty { lastUpdated = .now }
                 await perform(effects)
-                backoff = 1
+                backoff = 0.5
             } catch {
                 if Task.isCancelled { return }
                 let e = SyncthingError(error)
                 if e == .cancelled { return }
                 needsResync = true
-                guard e.isTransient else {
-                    // Needs user action (bad API key, untrusted certificate…).
-                    phase = .failed(e)
-                    pollTask?.cancel(); pollTask = nil
-                    eventTask = nil
-                    return
-                }
-                phase = (state.status == nil || e == .offline) ? .failed(e) : .polling(e)
+                phase = (state.status == nil || e == .notRunning) ? .failed(e) : .polling(e)
                 try? await configuration.sleep(.seconds(backoff))
                 backoff = min(configuration.maxBackoff, backoff * 2)
             }
@@ -262,12 +241,7 @@ public final class ServerSession: Identifiable {
         do {
             let connections = try await client.connections()
             state.applyConnections(connections)
-            let status = try await client.systemStatus()
-            if let previous = state.status?.startTime, let current = status.startTime, previous != current {
-                // The daemon restarted: event IDs were reset.
-                needsResync = true
-            }
-            state.status = status
+            state.status = try await client.systemStatus()
             lastUpdated = .now
 
             let streamDown = phase != .live
@@ -275,7 +249,6 @@ public final class ServerSession: Identifiable {
                 await refreshSlowData()
             }
             if streamDown && slow {
-                // Fallback: without events, poll what they would have told us.
                 await refreshConfig()
                 await refreshFolderStatuses(state.folders.filter { !$0.paused }.map(\.id))
                 await refreshPending()
@@ -285,7 +258,7 @@ public final class ServerSession: Identifiable {
         }
     }
 
-    // MARK: - Folder-detail data
+    // MARK: - Detail data
 
     public func loadFolderErrors(_ folderID: FolderID) async {
         if let errors = try? await client.folderErrors(folderID) {
@@ -324,9 +297,7 @@ public final class ServerSession: Identifiable {
     }
 
     public func rescanAll() async {
-        await run {
-            for folder in state.folders where !folder.paused { try await client.scan(folder: folder.id) }
-        }
+        await run { try await client.scan(folder: nil) }
     }
 
     public func setFolderPaused(_ folderID: FolderID, paused: Bool) async {
@@ -337,19 +308,17 @@ public final class ServerSession: Identifiable {
     }
 
     public func setDevicePaused(_ deviceID: DeviceID, paused: Bool) async {
-        let ok = await run {
-            if paused { try await client.pause(device: deviceID) } else { try await client.resume(device: deviceID) }
-        }
+        let ok = await run { try await client.setDevicePaused(deviceID, paused: paused) }
         if ok { setLocalDevicePaused(deviceID, paused) }
     }
 
     public func pauseAll() async {
-        let ok = await run { try await client.pause(device: nil) }
+        let ok = await run { try await client.setDevicePaused(nil, paused: true) }
         if ok { for d in state.remoteDevices { setLocalDevicePaused(d.deviceID, true) } }
     }
 
     public func resumeAll() async {
-        let ok = await run { try await client.resume(device: nil) }
+        let ok = await run { try await client.setDevicePaused(nil, paused: false) }
         if ok { for d in state.remoteDevices { setLocalDevicePaused(d.deviceID, false) } }
     }
 
@@ -358,104 +327,90 @@ public final class ServerSession: Identifiable {
                                               data: .object(["device": .string(id)])), to: &state)
     }
 
-    public func restart() async {
-        let ok = await run { try await client.restart() }
-        if ok {
-            phase = .connecting
-            restartLoops()
-        }
+    // MARK: - Folder & device management
+
+    /// Adds or updates a folder and refreshes config.
+    @discardableResult
+    public func saveFolder(_ draft: FolderDraft) async -> Bool {
+        let ok = await run { try await client.setFolder(draft.json) }
+        if ok { await refreshConfig() }
+        return ok
     }
 
-    public func shutdown() async {
-        let ok = await run { try await client.shutdown() }
-        if ok {
-            stop()
-            phase = .shutDown
-        }
+    @discardableResult
+    public func removeFolder(_ folderID: FolderID) async -> Bool {
+        let ok = await run { try await client.removeFolder(folderID) }
+        if ok { await refreshConfig() }
+        return ok
     }
 
-    public func clearSystemErrors() async {
-        let ok = await run { try await client.clearSystemErrors() }
-        if ok { state.systemErrors = [] }
+    /// Adds or updates a remote device, optionally sharing folders with it.
+    @discardableResult
+    public func saveDevice(_ draft: DeviceDraft, sharing folderIDs: Set<FolderID> = []) async -> Bool {
+        let ok = await run {
+            try await client.setDevice(draft.json)
+            for folder in state.folders {
+                let shared = folder.deviceIDs.contains(draft.deviceID)
+                let wanted = folderIDs.contains(folder.id)
+                guard shared != wanted else { continue }
+                let devices = wanted ? folder.deviceIDs + [draft.deviceID] : folder.deviceIDs.filter { $0 != draft.deviceID }
+                try await client.setFolder(FolderDraft.sharing(folder.id, with: devices))
+            }
+        }
+        if ok {
+            state.pendingDevices.removeAll { $0.deviceID == draft.deviceID }
+            await refreshConfig()
+        }
+        return ok
+    }
+
+    @discardableResult
+    public func removeDevice(_ deviceID: DeviceID) async -> Bool {
+        let ok = await run { try await client.removeDevice(deviceID) }
+        if ok { await refreshConfig() }
+        return ok
+    }
+
+    /// Sets the devices a folder is shared with.
+    @discardableResult
+    public func setSharing(folder folderID: FolderID, devices: Set<DeviceID>) async -> Bool {
+        let ok = await run { try await client.setFolder(FolderDraft.sharing(folderID, with: Array(devices))) }
+        if ok { await refreshConfig() }
+        return ok
+    }
+
+    @discardableResult
+    public func renameThisDevice(_ name: String) async -> Bool {
+        let ok = await run { try await client.setDeviceName(name) }
+        if ok { await refreshConfig() }
+        return ok
     }
 
     // MARK: - Pending requests
 
-    public func dismiss(_ device: PendingDevice) async {
-        let ok = await run { try await client.dismissPendingDevice(device.deviceID) }
+    public func ignore(_ device: PendingDevice) async {
+        let ok = await run { try await client.ignorePendingDevice(device.deviceID) }
         if ok { state.pendingDevices.removeAll { $0.id == device.id } }
     }
 
-    public func dismiss(_ folder: PendingFolder) async {
-        let ok = await run { try await client.dismissPendingFolder(folder.folderID, device: folder.offeredBy) }
+    public func ignore(_ folder: PendingFolder) async {
+        let ok = await run { try await client.ignorePendingFolder(folder) }
         if ok { state.pendingFolders.removeAll { $0.id == folder.id } }
     }
 
-    public func accept(_ device: PendingDevice, name: String) async -> Bool {
-        let ok = await run {
-            let config = PendingActions.deviceConfig(from: try await client.deviceDefaults(), for: device, name: name)
-            try await client.addDevice(config)
-        }
-        if ok {
-            state.pendingDevices.removeAll { $0.id == device.id }
-            await refreshConfig()
-        }
-        return ok
-    }
-
-    /// Suggested local path for accepting a pending folder, based on the
-    /// server's default folder path.
-    public func suggestedPath(for folder: PendingFolder) async -> String {
+    /// Default location for a newly accepted or created folder.
+    public func suggestedPath(forLabel label: String, id: FolderID) async -> String {
         let defaults = try? await client.folderDefaults()
-        return PendingActions.suggestedPath(defaultPath: defaults?["path"]?.stringValue, folder: folder,
-                                            separator: state.status?.pathSeparator ?? "/")
-    }
-
-    public func accept(_ folder: PendingFolder, path: String) async -> Bool {
-        let ok = await run {
-            let config = PendingActions.folderConfig(from: try await client.folderDefaults(), for: folder, path: path)
-            try await client.addFolder(config)
-        }
-        if ok {
-            state.pendingFolders.removeAll { $0.folderID == folder.folderID }
-            await refreshConfig()
-        }
-        return ok
+        let name = label.isEmpty ? id : label
+        return PathSuggestion.make(defaultPath: defaults?["path"]?.stringValue, name: name,
+                                   separator: state.status?.pathSeparator ?? "/")
     }
 }
 
-/// Builds config objects for accepting pending requests on top of the
-/// server's own defaults, preserving fields this app doesn't model.
-public enum PendingActions {
-    public static func deviceConfig(from defaults: JSONValue, for device: PendingDevice, name: String) -> JSONValue {
-        var config = defaults
-        if case .object = config {} else { config = .object([:]) }
-        config["deviceID"] = .string(device.deviceID)
-        config["name"] = .string(name.isEmpty ? device.name : name)
-        if config["addresses"]?.arrayValue?.isEmpty ?? true {
-            config["addresses"] = .array([.string("dynamic")])
-        }
-        return config
-    }
-
-    public static func folderConfig(from defaults: JSONValue, for folder: PendingFolder, path: String) -> JSONValue {
-        var config = defaults
-        if case .object = config {} else { config = .object([:]) }
-        config["id"] = .string(folder.folderID)
-        config["label"] = .string(folder.label)
-        config["path"] = .string(path)
-        if folder.receiveEncrypted { config["type"] = .string("receiveencrypted") }
-        var devices = config["devices"]?.arrayValue ?? []
-        if !devices.contains(where: { $0["deviceID"]?.stringValue == folder.offeredBy }) {
-            devices.append(.object(["deviceID": .string(folder.offeredBy)]))
-        }
-        config["devices"] = .array(devices)
-        return config
-    }
-
-    public static func suggestedPath(defaultPath: String?, folder: PendingFolder, separator: String) -> String {
+public enum PathSuggestion {
+    public static func make(defaultPath: String?, name: String, separator: String) -> String {
         let base = (defaultPath?.isEmpty == false ? defaultPath! : "~")
-        let name = folder.label.isEmpty ? folder.folderID : folder.label
-        return base.hasSuffix(separator) ? base + name : base + separator + name
+        let safe = name.replacingOccurrences(of: separator, with: "-")
+        return base.hasSuffix(separator) ? base + safe : base + separator + safe
     }
 }

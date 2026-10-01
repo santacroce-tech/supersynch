@@ -5,8 +5,8 @@ final class EventReducerTests: XCTestCase {
     private let laptop = MockData.laptopID
     private let phone = MockData.phoneID
 
-    private func baseState() -> ServerState {
-        var s = ServerState()
+    private func baseState() -> NodeState {
+        var s = NodeState()
         s.status = SystemStatus(myID: MockData.myID)
         s.applyFolders(MockData.folders)
         s.applyDevices(MockData.devices)
@@ -41,7 +41,7 @@ final class EventReducerTests: XCTestCase {
     }
 
     func testFirstBatchFromZeroIsNotAGap() {
-        var s = ServerState()
+        var s = NodeState()
         let effects = EventReducer.apply([event(500, "Ping", [:])], to: &s)
         XCTAssertFalse(effects.contains(.resync))
         XCTAssertEqual(s.lastEventID, 500)
@@ -246,7 +246,7 @@ final class DerivedStateTests: XCTestCase {
     }
 
     func testApplyConnectionsComputesPerDeviceRates() {
-        var s = ServerState()
+        var s = NodeState()
         let t0 = Date(timeIntervalSince1970: 100)
         s.applyConnections(ConnectionsResponse(
             connections: ["A": ConnectionInfo(connected: true, inBytesTotal: 0, outBytesTotal: 0, at: t0)],

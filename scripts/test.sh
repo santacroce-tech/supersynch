@@ -3,6 +3,7 @@
 # Usage: scripts/test.sh [simulator name]   (default: "iPhone 15")
 set -euo pipefail
 cd "$(dirname "$0")/.."
+scripts/build-bridge.sh
 DEVICE="${1:-iPhone 15}"
 xcodegen generate --quiet
 set -o pipefail

@@ -13,7 +13,7 @@ public struct TransferRates: Sendable, Equatable {
 /// A value snapshot of everything known about one Syncthing instance. It is
 /// mutated only by `EventReducer` and the `apply…` functions below, which
 /// keeps live-update logic pure and unit-testable.
-public struct ServerState: Sendable, Equatable {
+public struct NodeState: Sendable, Equatable {
     public var status: SystemStatus?
     public var version: SystemVersion?
 
@@ -35,7 +35,6 @@ public struct ServerState: Sendable, Equatable {
     /// Completion of each folder on each remote device, from `FolderCompletion` events.
     public var remoteFolderCompletion: [DeviceID: [FolderID: Completion]] = [:]
 
-    public var systemErrors: [SystemError] = []
     public var pendingDevices: [PendingDevice] = []
     public var pendingFolders: [PendingFolder] = []
 
@@ -58,6 +57,23 @@ public struct ServerState: Sendable, Equatable {
     }
 
     public var pendingCount: Int { pendingDevices.count + pendingFolders.count }
+
+    /// True when nothing is left to do: every running folder is idle with
+    /// nothing needed locally, and every connected device that shares folders
+    /// with us has caught up. Used to end background sync early.
+    public var isSyncIdle: Bool {
+        for folder in folders where !folder.paused {
+            guard let status = folderStatuses[folder.id], status.state == "idle", status.needTotalItems == 0 else {
+                return false
+            }
+        }
+        for device in remoteDevices where connections[device.deviceID]?.connected == true {
+            if !folders(sharedWith: device.deviceID).isEmpty, let c = deviceCompletion[device.deviceID], c.completion < 100 {
+                return false
+            }
+        }
+        return true
+    }
 
     public func folder(_ id: FolderID) -> FolderConfig? { folders.first { $0.id == id } }
     public func device(_ id: DeviceID) -> DeviceConfig? { devices.first { $0.deviceID == id } }
