@@ -2,8 +2,9 @@ import SwiftUI
 import SyncthingKit
 
 struct DeviceListView: View {
-    let session: ServerSession
+    let session: SyncSession
     var selection: Binding<Route?>?
+    @State private var adding = false
 
     var body: some View {
         SelectableList(selection: selection) {
@@ -25,13 +26,25 @@ struct DeviceListView: View {
         }
         .navigationTitle("Devices")
         .refreshable { await session.refresh() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Add Device", systemImage: "plus") { adding = true }
+                    .keyboardShortcut("n", modifiers: .command)
+            }
+        }
+        .sheet(isPresented: $adding) { DeviceEditorView(session: session, existing: nil) }
         .overlay {
             if session.state.remoteDevices.isEmpty {
                 if session.state.status == nil {
                     ProgressView()
                 } else {
-                    ContentUnavailableView("No Remote Devices", systemImage: "laptopcomputer.and.iphone",
-                                           description: Text("This Syncthing instance isn't paired with any other devices."))
+                    ContentUnavailableView {
+                        Label("No Devices Yet", systemImage: "laptopcomputer.and.iphone")
+                    } description: {
+                        Text("Add your Mac using its Syncthing device ID, then add this iPhone on the Mac.")
+                    } actions: {
+                        Button("Add Device") { adding = true }.buttonStyle(.borderedProminent)
+                    }
                 }
             }
         }
@@ -40,7 +53,7 @@ struct DeviceListView: View {
 
 struct DeviceRow: View {
     let device: DeviceConfig
-    let session: ServerSession
+    let session: SyncSession
 
     var body: some View {
         let state = session.state.deviceState(device.deviceID)
@@ -75,8 +88,11 @@ struct DeviceRow: View {
 }
 
 struct DeviceDetailView: View {
-    let session: ServerSession
+    let session: SyncSession
     let deviceID: DeviceID
+    @State private var editing = false
+    @State private var confirmRemove = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         if let device = session.state.device(deviceID) {
@@ -157,12 +173,45 @@ struct DeviceDetailView: View {
 
             Section("Identity") {
                 DeviceIDRow(deviceID: deviceID)
-                InfoRow(title: "Compression", value: device.compression)
-                InfoRow(title: "Introducer", value: device.introducer ? String(localized: "Yes") : String(localized: "No"))
+            }
+
+            Section {
+                Button("Remove Device", role: .destructive) { confirmRemove = true }
             }
         }
         .navigationTitle(device.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await session.refresh() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } }
+        }
+        .sheet(isPresented: $editing) { DeviceEditorView(session: session, existing: device) }
+        .confirmationDialog("Remove \(device.displayName)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button("Remove Device", role: .destructive) {
+                Task { if await session.removeDevice(deviceID) { dismiss() } }
+            }
+        } message: {
+            Text("Folders stop syncing with this device. Files on both devices are kept.")
+        }
+    }
+}
+
+/// Device ID with a copy action.
+struct DeviceIDRow: View {
+    let deviceID: DeviceID
+
+    var body: some View {
+        LabeledContent("Device ID") {
+            Text(deviceID)
+                .font(.caption.monospaced())
+                .lineLimit(2)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
+        .contextMenu {
+            Button("Copy Device ID", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = deviceID
+            }
+        }
     }
 }

@@ -4,20 +4,18 @@ import SyncthingKit
 /// Compact width (iPhone, narrow iPad multitasking windows): a single
 /// navigation stack. Thin adapter over shared views.
 struct PhoneRootView: View {
-    let session: ServerSession
+    let session: SyncSession
     let sectionRequest: SectionRequest?
-    let onManageServers: () -> Void
-    let onEditServer: () -> Void
 
     @State private var path = NavigationPath()
 
     var body: some View {
         NavigationStack(path: $path) {
-            SidebarView(session: session, selection: nil, onManageServers: onManageServers)
-                .connectionBanner(session, onEditServer: onEditServer)
+            SidebarView(session: session, selection: nil)
+                .connectionBanner()
                 .refreshable { await session.refresh() }
                 .navigationDestination(for: AppSection.self) { section in
-                    SectionView(section: section, session: session, onEditServer: onEditServer)
+                    SectionView(section: section, session: session)
                 }
                 .navigationDestination(for: Route.self) { RouteDestination(route: $0, session: session) }
                 .navigationDestination(for: DetailRoute.self) { DetailRouteDestination(route: $0, session: session) }

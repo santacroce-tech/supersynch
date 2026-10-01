@@ -3,25 +3,27 @@ import SyncthingKit
 
 /// Top-level areas of a server. Same information architecture on all idioms.
 enum AppSection: String, Hashable, CaseIterable, Identifiable {
-    case dashboard, folders, devices, pending
+    case dashboard, folders, devices, pending, settings
 
     var id: String { rawValue }
 
     var title: LocalizedStringKey {
         switch self {
-        case .dashboard: "Dashboard"
+        case .dashboard: "This Device"
         case .folders: "Folders"
         case .devices: "Devices"
         case .pending: "Pending Requests"
+        case .settings: "Settings"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .dashboard: "gauge.with.dots.needle.33percent"
+        case .dashboard: "iphone.gen3"
         case .folders: "folder"
         case .devices: "laptopcomputer.and.iphone"
         case .pending: "person.crop.circle.badge.questionmark"
+        case .settings: "gearshape"
         }
     }
 
@@ -31,6 +33,7 @@ enum AppSection: String, Hashable, CaseIterable, Identifiable {
         case .folders: "2"
         case .devices: "3"
         case .pending: "4"
+        case .settings: ","
         }
     }
 }
@@ -44,12 +47,14 @@ enum Route: Hashable {
 /// Screens pushed from within a detail view.
 enum DetailRoute: Hashable {
     case outOfSync(FolderID)
+    /// Browse a synced folder's files; `subpath` is relative to the folder root.
+    case browse(FolderID, subpath: String)
 }
 
 /// Resolves a `Route` to its detail view. Shared by both idioms.
 struct RouteDestination: View {
     let route: Route
-    let session: ServerSession
+    let session: SyncSession
 
     var body: some View {
         switch route {
@@ -61,11 +66,12 @@ struct RouteDestination: View {
 
 struct DetailRouteDestination: View {
     let route: DetailRoute
-    let session: ServerSession
+    let session: SyncSession
 
     var body: some View {
         switch route {
         case .outOfSync(let id): OutOfSyncView(session: session, folderID: id)
+        case .browse(let id, let subpath): FileBrowserView(session: session, folderID: id, subpath: subpath)
         }
     }
 }

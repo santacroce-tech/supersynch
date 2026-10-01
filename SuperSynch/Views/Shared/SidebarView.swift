@@ -1,58 +1,42 @@
 import SwiftUI
 import SyncthingKit
 
-/// Server switcher + section list. The sidebar column on iPad and the root
+/// Status summary + section list. The sidebar column on iPad and the root
 /// screen on iPhone.
 struct SidebarView: View {
-    @Environment(AppModel.self) private var app
-    let session: ServerSession
+    let session: SyncSession
     /// Non-nil in the split view (drives the content column).
     var selection: Binding<AppSection?>?
-    let onManageServers: () -> Void
 
     var body: some View {
         SelectableList(selection: selection) {
             Section {
-                ServerSummaryRow(session: session)
+                NodeSummaryRow(session: session)
             }
             Section {
                 ForEach(AppSection.allCases) { section in
                     NavigationLink(value: section) {
                         Label(section.title, systemImage: section.systemImage)
-                            .badge(badge(for: section))
+                            .badge(section == .pending ? session.state.pendingCount : 0)
                     }
                 }
             }
         }
-        .navigationTitle(session.server.displayName)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                ServerSwitcherMenu(onManageServers: onManageServers)
-            }
-        }
-    }
-
-    private func badge(for section: AppSection) -> Int {
-        switch section {
-        case .pending: session.state.pendingCount
-        case .dashboard: session.state.systemErrors.count
-        default: 0
-        }
+        .navigationTitle("SuperSynch")
     }
 }
 
-/// Compact status: connection state, device count and transfer rates.
-struct ServerSummaryRow: View {
-    let session: ServerSession
+/// Compact status: engine state, connected devices and transfer rates.
+struct NodeSummaryRow: View {
+    let session: SyncSession
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                PhaseIndicator(phase: session.phase)
+                EngineIndicator()
                 Spacer()
-                if let version = session.state.version?.version {
-                    Text(version).font(.caption).foregroundStyle(.secondary)
-                }
+                Text("\(session.state.connectedDeviceCount) of \(session.state.remoteDevices.count) devices")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 16) {
                 Label(Format.rate(session.state.totalRates.inBps), systemImage: "arrow.down")
@@ -66,8 +50,9 @@ struct ServerSummaryRow: View {
     }
 }
 
-struct PhaseIndicator: View {
-    let phase: ConnectionPhase
+/// Dot + label for the embedded engine's state.
+struct EngineIndicator: View {
+    @Environment(AppModel.self) private var app
 
     var body: some View {
         HStack(spacing: 8) {
@@ -78,45 +63,26 @@ struct PhaseIndicator: View {
         .fixedSize()
     }
 
+    private var syncing: Bool {
+        !app.session.state.isSyncIdle && app.session.phase == .live
+    }
+
     private var text: LocalizedStringKey {
-        switch phase {
-        case .idle: "Idle"
-        case .connecting: "Connecting…"
-        case .live: "Connected"
-        case .polling: "Reconnecting…"
-        case .failed: "Offline"
-        case .shutDown: "Shut Down"
+        switch app.engine?.status {
+        case .starting: "Starting…"
+        case .stopping: "Stopping…"
+        case .stopped: "Stopped"
+        case .failed: "Failed"
+        default: app.session.phase == .live ? (syncing ? "Syncing" : "Up to Date") : "Connecting…"
         }
     }
 
     private var color: Color {
-        switch phase {
-        case .live: .green
-        case .connecting, .polling: .orange
+        switch app.engine?.status {
         case .failed: .red
-        case .idle, .shutDown: .gray
+        case .starting, .stopping: .orange
+        case .stopped: .gray
+        default: app.session.phase == .live ? (syncing ? .blue : .green) : .orange
         }
-    }
-}
-
-/// Menu for switching between saved servers.
-struct ServerSwitcherMenu: View {
-    @Environment(AppModel.self) private var app
-    let onManageServers: () -> Void
-
-    var body: some View {
-        @Bindable var app = app
-        Menu {
-            Picker("Server", selection: $app.selectedServerID) {
-                ForEach(app.store.servers) { server in
-                    Text(server.displayName).tag(Optional(server.id))
-                }
-            }
-            Divider()
-            Button("Manage Servers…", systemImage: "server.rack", action: onManageServers)
-        } label: {
-            Label("Servers", systemImage: "server.rack")
-        }
-        .accessibilityHint(Text("Switch between Syncthing servers"))
     }
 }

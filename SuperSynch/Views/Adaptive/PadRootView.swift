@@ -4,19 +4,17 @@ import SyncthingKit
 /// Regular width (iPad full screen / large Stage Manager windows):
 /// three-column master-detail. Thin adapter over shared views.
 struct PadRootView: View {
-    let session: ServerSession
+    let session: SyncSession
     @Binding var section: AppSection?
     @Binding var route: Route?
-    let onManageServers: () -> Void
-    let onEditServer: () -> Void
 
     @State private var detailPath = NavigationPath()
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(session: session, selection: $section, onManageServers: onManageServers)
+            SidebarView(session: session, selection: $section)
         } content: {
-            SectionView(section: section ?? .dashboard, session: session, selection: $route, onEditServer: onEditServer)
+            SectionView(section: section ?? .dashboard, session: session, selection: $route)
         } detail: {
             NavigationStack(path: $detailPath) {
                 Group {

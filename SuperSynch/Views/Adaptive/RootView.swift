@@ -8,40 +8,22 @@ struct RootView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    @State private var serverSheet: ServerSheet?
     @State private var section: AppSection? = .dashboard
     @State private var route: Route?
     @State private var sectionRequest: SectionRequest?
 
     var body: some View {
+        let session = app.session
         Group {
-            if let session = app.selectedSession {
-                Group {
-                    if sizeClass == .regular {
-                        PadRootView(session: session, section: $section, route: $route,
-                                    onManageServers: { serverSheet = .manage },
-                                    onEditServer: { serverSheet = .edit(session.server) })
-                    } else {
-                        PhoneRootView(session: session, sectionRequest: sectionRequest,
-                                      onManageServers: { serverSheet = .manage },
-                                      onEditServer: { serverSheet = .edit(session.server) })
-                    }
-                }
-                .id(session.id)
-                .focusedSceneValue(\.serverCommands, commands(for: session))
-                .alert(isPresented: actionErrorBinding(session), error: session.actionError) {
-                    Button("OK") { session.actionError = nil }
-                }
+            if sizeClass == .regular {
+                PadRootView(session: session, section: $section, route: $route)
             } else {
-                WelcomeView { serverSheet = .add }
+                PhoneRootView(session: session, sectionRequest: sectionRequest)
             }
         }
-        .sheet(item: $serverSheet) { sheet in
-            switch sheet {
-            case .manage: ServerListView()
-            case .add: ServerEditorView(server: nil)
-            case .edit(let server): ServerEditorView(server: server)
-            }
+        .focusedSceneValue(\.serverCommands, commands(for: session))
+        .alert(isPresented: actionErrorBinding(session), error: session.actionError) {
+            Button("OK") { session.actionError = nil }
         }
         .task {
             // Demo-only: `-DemoSection folders` opens a section for screenshots.
@@ -56,13 +38,9 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: app.selectedServerID) {
-            section = .dashboard
-            route = nil
-        }
     }
 
-    private func commands(for session: ServerSession) -> ServerCommandActions {
+    private func commands(for session: SyncSession) -> ServerCommandActions {
         ServerCommandActions(
             refresh: { Task { await session.refresh() } },
             rescanAll: { Task { await session.rescanAll() } },
@@ -74,7 +52,7 @@ struct RootView: View {
         )
     }
 
-    private func actionErrorBinding(_ session: ServerSession) -> Binding<Bool> {
+    private func actionErrorBinding(_ session: SyncSession) -> Binding<Bool> {
         Binding(get: { session.actionError != nil }, set: { if !$0 { session.actionError = nil } })
     }
 }
@@ -89,9 +67,8 @@ struct SectionRequest: Equatable {
 /// pushed screen on iPhone.
 struct SectionView: View {
     let section: AppSection
-    let session: ServerSession
+    let session: SyncSession
     var selection: Binding<Route?>?
-    var onEditServer: (() -> Void)?
 
     var body: some View {
         Group {
@@ -100,26 +77,9 @@ struct SectionView: View {
             case .folders: FolderListView(session: session, selection: selection)
             case .devices: DeviceListView(session: session, selection: selection)
             case .pending: PendingView(session: session)
+            case .settings: SettingsView(session: session)
             }
         }
-        .connectionBanner(session, onEditServer: onEditServer)
-    }
-}
-
-struct WelcomeView: View {
-    let onAddServer: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label("Welcome to SuperSynch", systemImage: "arrow.triangle.2.circlepath.circle")
-            } description: {
-                Text("Monitor and control Syncthing running on your NAS, home server or VPS. Add a server using its web GUI address and API key.")
-            } actions: {
-                Button("Add Server", action: onAddServer)
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut("n", modifiers: .command)
-            }
-        }
+        .connectionBanner()
     }
 }

@@ -2,8 +2,9 @@ import SwiftUI
 import SyncthingKit
 
 struct FolderListView: View {
-    let session: ServerSession
+    let session: SyncSession
     var selection: Binding<Route?>?
+    @State private var adding = false
 
     var body: some View {
         SelectableList(selection: selection) {
@@ -32,13 +33,25 @@ struct FolderListView: View {
         }
         .navigationTitle("Folders")
         .refreshable { await session.refresh() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("New Folder", systemImage: "plus") { adding = true }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+            }
+        }
+        .sheet(isPresented: $adding) { FolderEditorView(session: session) }
         .overlay {
             if session.state.folders.isEmpty {
                 if session.state.status == nil {
                     ProgressView()
                 } else {
-                    ContentUnavailableView("No Folders", systemImage: "folder",
-                                           description: Text("This Syncthing instance has no folders configured."))
+                    ContentUnavailableView {
+                        Label("No Folders Yet", systemImage: "folder.badge.plus")
+                    } description: {
+                        Text("Create a folder to share with your Mac, or accept one your Mac shares with this device.")
+                    } actions: {
+                        Button("New Folder") { adding = true }.buttonStyle(.borderedProminent)
+                    }
                 }
             }
         }
@@ -47,7 +60,7 @@ struct FolderListView: View {
 
 struct FolderRow: View {
     let folder: FolderConfig
-    let session: ServerSession
+    let session: SyncSession
 
     var body: some View {
         let state = session.state.folderState(folder.id)

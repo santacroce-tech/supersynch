@@ -2,8 +2,12 @@ import SwiftUI
 import SyncthingKit
 
 struct FolderDetailView: View {
-    let session: ServerSession
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    let session: SyncSession
     let folderID: FolderID
+    @State private var editing = false
+    @State private var confirmRemove = false
 
     var body: some View {
         if let folder = session.state.folder(folderID) {
@@ -39,6 +43,9 @@ struct FolderDetailView: View {
             }
 
             Section("Actions") {
+                NavigationLink(value: DetailRoute.browse(folderID, subpath: "")) {
+                    Label("Browse Files", systemImage: "folder")
+                }
                 Button {
                     Task { await session.rescan(folder: folderID) }
                 } label: {
@@ -113,11 +120,30 @@ struct FolderDetailView: View {
                     }
                 }
             }
+            Section {
+                Button("Remove Folder", role: .destructive) { confirmRemove = true }
+            }
         }
         .navigationTitle(folder.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await reload() }
         .task(id: folderID) { await reload() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } }
+        }
+        .sheet(isPresented: $editing) { FolderEditorView(session: session, existing: folder) }
+        .confirmationDialog("Remove \(folder.displayName)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button("Remove Folder", role: .destructive) {
+                Task {
+                    if await session.removeFolder(folderID) {
+                        app.engine?.externalFolders.unregister(folderID)
+                        dismiss()
+                    }
+                }
+            }
+        } message: {
+            Text("The folder stops syncing. Its files stay on this device and can be deleted in the Files app.")
+        }
     }
 
     private func reload() async {
@@ -131,7 +157,7 @@ struct FolderDetailView: View {
 }
 
 struct RemoteCompletionRow: View {
-    let session: ServerSession
+    let session: SyncSession
     let deviceID: DeviceID
     let completion: Completion?
 
@@ -155,7 +181,7 @@ struct RemoteCompletionRow: View {
 }
 
 struct OutOfSyncView: View {
-    let session: ServerSession
+    let session: SyncSession
     let folderID: FolderID
 
     @State private var need: NeedResponse?
