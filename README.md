@@ -6,6 +6,8 @@ SuperSynch runs **[Syncthing](https://syncthing.net) on your iPhone and iPad**, 
 - Native SwiftUI on iOS/iPadOS 17+, Swift 6. iPhone uses a `NavigationStack`; iPad uses a three-column `NavigationSplitView`. Everything else is shared code.
 - No analytics. Syncthing's usage reporting, crash reporting, auto-upgrade and web GUI are all turned off.
 
+> iOS doesn't allow continuous background syncing, and some features of desktop Syncthing aren't available yet. See **[Limitations](#limitations)** before relying on it.
+
 ## Features
 
 | Area | What you get |
@@ -16,7 +18,7 @@ SuperSynch runs **[Syncthing](https://syncthing.net) on your iPhone and iPad**, 
 | Devices | Connection state, address, completion, last seen, shared folders; pause/resume, edit, remove. |
 | Pending | Devices that try to connect and folders offered to you: **Add** or **Ignore**. |
 | Live status | Syncthing's event stream drives the UI in real time, including transfer rates and sync progress. |
-| Background | Keeps syncing for a short while after you leave the app, then iOS-scheduled background syncs (see below). |
+| Background | Keeps syncing for a short while after you leave the app, then iOS-scheduled background syncs (see [Limitations](#limitations)). |
 | UX | Colour and icon per sync state, pull-to-refresh, empty states, error banners, Dark Mode, Dynamic Type, Reduce Motion, iPad keyboard shortcuts. |
 
 ## Pairing with your Mac
@@ -30,19 +32,38 @@ SuperSynch runs **[Syncthing](https://syncthing.net) on your iPhone and iPad**, 
 
 If the two can't find each other on your network, set the Mac's address manually when adding it on the phone (*Connection → Manual*, e.g. `tcp://192.168.1.20:22000`). Global discovery and relays are on by default, so devices also find each other across networks.
 
-## How iOS limits syncing (important)
+## Limitations
 
-iOS doesn't let apps run continuously in the background, so SuperSynch can't stay in sync with your Mac around the clock the way two desktops do. It syncs:
+Read this before relying on SuperSynch. Some limits come from iOS, some from embedding Syncthing without its web GUI, and some reflect what has (and hasn't) been tested.
 
-1. **While the app is open.** This is the reliable way to sync.
-2. **For ~30 seconds after you leave it.** It finishes in-progress transfers, then shuts Syncthing down cleanly.
-3. **When iOS grants background time.** It uses a short app-refresh window, and a longer processing window that iOS typically grants while charging on Wi-Fi. iOS decides when these happen.
+### iOS platform limits
+- **No continuous background sync.** iOS doesn't let apps run continuously in the background, so the phone can't stay in sync around the clock the way two desktops do. SuperSynch syncs:
+  1. **While the app is open.** This is the only reliable way to sync. Open the app to catch up.
+  2. **For about 30 seconds after you leave it.** It finishes in-progress transfers, then shuts Syncthing down cleanly.
+  3. **When iOS grants background time.** It uses a short app-refresh window, and a longer processing window that iOS typically grants while charging on Wi-Fi. iOS decides when, and whether, these run, and they can be days apart for rarely used apps.
 
-When the phone isn't running, your Mac queues the changes, and they sync the next time the app runs.
+  While the phone is offline, your Mac queues the changes; they sync the next time the app runs.
+- **No local (LAN) discovery yet.** Syncthing's local discovery uses UDP broadcasts. On iOS these need Apple's multicast networking entitlement, which Apple must approve. Until then, devices find each other through **global discovery** and **relays** (both on by default, so they need internet access), or through a **manual address** for your Mac (e.g. `tcp://192.168.1.20:22000`).
+- **Inbound connections only while running.** Your Mac can only connect to the phone while SuperSynch is syncing; otherwise the Mac shows the phone as disconnected. That's expected.
+- **Whole folders only.** Every file in a shared folder is downloaded to the phone, so large folders take matching storage. Selective or on-demand sync isn't implemented yet.
+- **Folders outside the app.** Syncing into a folder picked from another location works for local storage such as other apps' "On My iPhone" folders. Cloud-backed locations like iCloud Drive can evict downloaded copies or coordinate writes in ways Syncthing doesn't expect, so they're not recommended. Access depends on a security-scoped bookmark; if the folder is moved or deleted, sync for it stops.
+- **Battery and data.** Syncing large folders over cellular uses mobile data, and there's no Wi-Fi-only setting yet. Hashing large files uses CPU and battery.
 
-**Local discovery:** iOS requires a special Apple entitlement (multicast networking) for apps to send the LAN broadcasts that Syncthing's local discovery uses. Until that entitlement is granted, use global discovery (on by default) or a manual address.
+### Embedded-engine limits
+The bridge talks to Syncthing in-process rather than through its REST API, so some information the web GUI shows isn't available:
+- **No per-device transfer rates or byte counters.** Syncthing doesn't expose these outside its REST layer, so per-device rates read as zero; total upload and download rates are accurate.
+- **Pending devices are only seen while the app runs.** A device that tried to connect while SuperSynch was closed isn't listed until it tries again. Pending *folders* are stored by Syncthing and always shown.
+- **No system log or error list.** Syncthing's internal error recorder isn't reachable. Folder-level errors (failed items) are shown.
+- **Folder statistics are partial.** "Last scan" is only known for scans since the app started, and the "last synced file" isn't available.
+- **Re-implemented internals.** Syncthing starts its folder-summary service only together with its web GUI, which is disabled here. The bridge contains a port of it (`go/stbridge/summary.go`) that must be kept in step when Syncthing is upgraded.
+- **Pinned Syncthing version.** Syncthing is pinned by commit (v2.1.5) because its `v2` tags don't use a `/v2` Go module path. Upgrading means bumping the commit, rebuilding the bridge and re-running the tests; it doesn't happen automatically.
+- **Folder types.** Receive-encrypted folders (untrusted devices) can be accepted, but there's no UI for setting encryption passwords.
+- **Not available in the app yet:** ignore patterns, file versioning and restore, conflict resolution, introducer settings and bandwidth limits. Use the Mac's Syncthing for these where they apply.
 
-**Folders outside the app:** syncing into a folder picked from another location works for local storage such as "On My iPhone" folders of other apps. Cloud-backed locations like iCloud Drive can evict downloaded copies or coordinate writes in ways Syncthing doesn't expect, so they're not recommended.
+### Testing status
+- Tested on the iOS simulator, including a real embedded node syncing files both ways with a separate Syncthing v2.1.5 process. **Not yet tested on a physical iPhone or iPad, or against a real Mac over Wi-Fi**: real-network behaviour, background-task timing, Files-app integration on device, and battery impact still need verifying.
+- **Running the app (not the tests) in the simulator conflicts with a Syncthing on the same Mac.** The simulator shares the Mac's network, so both try to listen on port 22000. Use a real device or `-DemoMode` for UI work. The tests use separate ports.
+- QR scanning needs a device camera; it isn't available in the simulator. Paste the ID there instead.
 
 ## Architecture
 
@@ -81,7 +102,7 @@ TEST_RUNNER_PEER_URL=http://127.0.0.1:8386 TEST_RUNNER_PEER_API_KEY=e2e-key scri
 (cd go && PEER_URL=http://127.0.0.1:8386 PEER_API_KEY=e2e-key go test -tags noassets ./stbridge/)
 ```
 
-> **Simulator note:** the simulator shares your Mac's network. When you run the app (not the tests) in the simulator, its Syncthing listens on the default port 22000, which conflicts with a Syncthing already running on the Mac. Prefer a real device or demo mode for UI work.
+> **Simulator note:** running the app (not the tests) in the simulator conflicts with a Syncthing already running on the Mac; see [Limitations](#limitations).
 
 ### Demo mode
 `-DemoMode` runs the UI against sample data without starting Syncthing:
