@@ -8,10 +8,16 @@ public struct FolderDraft: Sendable, Equatable {
     public var path: String
     public var type: String
     public var deviceIDs: [DeviceID]
+    /// Set for devices that should only receive encrypted data (untrusted).
+    public var encryptionPasswords: [DeviceID: String]
+    /// nil leaves versioning unchanged (or at the default for new folders).
+    public var versioning: Versioning?
 
     public init(id: FolderID = FolderDraft.generateID(), label: String = "", path: String = "",
-                type: String = "sendreceive", deviceIDs: [DeviceID] = []) {
+                type: String = "sendreceive", deviceIDs: [DeviceID] = [],
+                encryptionPasswords: [DeviceID: String] = [:], versioning: Versioning? = nil) {
         self.id = id; self.label = label; self.path = path; self.type = type; self.deviceIDs = deviceIDs
+        self.encryptionPasswords = encryptionPasswords; self.versioning = versioning
     }
 
     /// Accepting a folder offered by a remote device.
@@ -22,18 +28,29 @@ public struct FolderDraft: Sendable, Equatable {
     }
 
     public var json: JSONValue {
-        [
+        var object: JSONValue = [
             "id": .string(id),
             "label": .string(label),
             "path": .string(path),
             "type": .string(type),
-            "devices": .array(deviceIDs.map { ["deviceID": .string($0)] }),
+            "devices": Self.devicesJSON(deviceIDs, passwords: encryptionPasswords),
         ]
+        if let versioning { object["versioning"] = versioning.json }
+        return object
     }
 
-    /// Partial object that only changes a folder's device list.
-    public static func sharing(_ folderID: FolderID, with devices: [DeviceID]) -> JSONValue {
-        ["id": .string(folderID), "devices": .array(devices.map { ["deviceID": .string($0)] })]
+    static func devicesJSON(_ devices: [DeviceID], passwords: [DeviceID: String]) -> JSONValue {
+        .array(devices.map { id in
+            var entry: JSONValue = ["deviceID": .string(id)]
+            if let password = passwords[id], !password.isEmpty { entry["encryptionPassword"] = .string(password) }
+            return entry
+        })
+    }
+
+    /// Partial object that only changes a folder's device list, keeping
+    /// existing encryption passwords (Syncthing replaces the whole list).
+    public static func sharing(_ folder: FolderConfig, with devices: [DeviceID]) -> JSONValue {
+        ["id": .string(folder.id), "devices": devicesJSON(devices, passwords: folder.encryptionPasswords)]
     }
 
     /// Random ID in Syncthing's GUI style (`abcde-fghij`).
@@ -50,9 +67,16 @@ public struct DeviceDraft: Sendable, Equatable {
     public var name: String
     /// `dynamic` (discovery) or explicit addresses like `tcp://macbook.local:22000`.
     public var addresses: [String]
+    /// Accept devices and folders this device introduces.
+    public var introducer: Bool
+    /// Bandwidth limits in KiB/s; 0 = unlimited.
+    public var maxSendKbps: Int
+    public var maxRecvKbps: Int
 
-    public init(deviceID: DeviceID, name: String = "", addresses: [String] = ["dynamic"]) {
+    public init(deviceID: DeviceID, name: String = "", addresses: [String] = ["dynamic"],
+                introducer: Bool = false, maxSendKbps: Int = 0, maxRecvKbps: Int = 0) {
         self.deviceID = deviceID; self.name = name; self.addresses = addresses
+        self.introducer = introducer; self.maxSendKbps = maxSendKbps; self.maxRecvKbps = maxRecvKbps
     }
 
     public var json: JSONValue {
@@ -60,6 +84,9 @@ public struct DeviceDraft: Sendable, Equatable {
             "deviceID": .string(deviceID),
             "name": .string(name),
             "addresses": .array((addresses.isEmpty ? ["dynamic"] : addresses).map { .string($0) }),
+            "introducer": .bool(introducer),
+            "maxSendKbps": .number(Double(maxSendKbps)),
+            "maxRecvKbps": .number(Double(maxRecvKbps)),
         ]
     }
 }

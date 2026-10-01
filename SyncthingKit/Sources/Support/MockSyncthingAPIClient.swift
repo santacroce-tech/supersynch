@@ -22,6 +22,10 @@ public actor MockSyncthingAPIClient: SyncthingAPIClient {
     /// Queue of long-poll results; when empty, `events` suspends until cancelled.
     public var eventBatches: [Result<[SyncthingEvent], SyncthingError>] = []
     public var actionError: SyncthingError?
+    public var versions: [FolderID: [String: [FileVersion]]] = [:]
+    public var ignoreLines: [FolderID: [String]] = [:]
+    public var errors: [LogEntry] = []
+    public var log: [LogEntry] = []
 
     public private(set) var calls: [String] = []
     public private(set) var savedFolders: [JSONValue] = []
@@ -42,6 +46,7 @@ public actor MockSyncthingAPIClient: SyncthingAPIClient {
         fldStats = state.folderStats
         pendingDeviceList = state.pendingDevices
         pendingFolderList = state.pendingFolders
+        errors = state.systemErrors
     }
 
     public func configure(_ body: @Sendable (isolated MockSyncthingAPIClient) -> Void) {
@@ -141,6 +146,39 @@ public actor MockSyncthingAPIClient: SyncthingAPIClient {
     public func pendingFolders() async throws -> [PendingFolder] { record("pendingFolders"); return pendingFolderList }
     public func ignorePendingDevice(_ deviceID: DeviceID) async throws { try action("ignoreDevice \(deviceID)") }
     public func ignorePendingFolder(_ folder: PendingFolder) async throws { try action("ignoreFolder \(folder.folderID)") }
+
+    public func dismissPendingDevice(_ deviceID: DeviceID) async throws {
+        try action("dismissDevice \(deviceID)")
+        pendingDeviceList.removeAll { $0.deviceID == deviceID }
+    }
+
+    public func dismissPendingFolder(_ folder: PendingFolder) async throws {
+        try action("dismissFolder \(folder.folderID)")
+        pendingFolderList.removeAll { $0.id == folder.id }
+    }
+
+    public func folderVersions(_ folderID: FolderID) async throws -> [String: [FileVersion]] {
+        record("versions \(folderID)"); return versions[folderID] ?? [:]
+    }
+
+    public func restoreVersions(_ folderID: FolderID, _ versions: [String: FileVersion]) async throws -> [String: String] {
+        try action("restore \(folderID) \(versions.keys.sorted().joined(separator: ","))")
+        return [:]
+    }
+
+    public func ignores(_ folderID: FolderID) async throws -> IgnorePatterns {
+        record("ignores \(folderID)"); return IgnorePatterns(lines: ignoreLines[folderID] ?? [])
+    }
+
+    public func setIgnores(_ folderID: FolderID, lines: [String]) async throws {
+        try action("setIgnores \(folderID)"); ignoreLines[folderID] = lines
+    }
+
+    public func override(_ folderID: FolderID) async throws { try action("override \(folderID)") }
+    public func revert(_ folderID: FolderID) async throws { try action("revert \(folderID)") }
+    public func systemErrors() async throws -> [LogEntry] { record("systemErrors"); return errors }
+    public func clearSystemErrors() async throws { try action("clearErrors"); errors = [] }
+    public func systemLog() async throws -> [LogEntry] { record("systemLog"); return log }
 
     public func events(since: Int, limit: Int?, timeout: Int) async throws -> [SyncthingEvent] {
         record("events since=\(since)\(limit.map { " limit=\($0)" } ?? "")")

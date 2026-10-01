@@ -158,6 +158,14 @@ final class EmbeddedEngineTests: XCTestCase {
             (try? String(contentsOf: macDir.appending(path: "phone.txt"), encoding: .utf8)) == "from phone"
         }
         try await waitUntil(timeout: 30) { session.state.isSyncIdle }
+
+        // Per-device byte counters reach the UI state.
+        try await waitUntil(timeout: 15) { (session.state.connections[macID]?.inBytesTotal ?? 0) > 0 }
+
+        // Ignore patterns round-trip through the engine.
+        do { let ok = await session.saveIgnores(folderID, lines: ["*.tmp"]); XCTAssertTrue(ok) }
+        let ignores = try await session.loadIgnores(folderID)
+        XCTAssertEqual(ignores.lines, ["*.tmp"])
     }
 }
 

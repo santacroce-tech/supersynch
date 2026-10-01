@@ -181,6 +181,51 @@ public final class EmbeddedSyncthingClient: SyncthingAPIClient {
         try await call { try $0.ignoreFolder(folder.folderID, label: folder.label, deviceID: folder.offeredBy) }
     }
 
+    public func dismissPendingDevice(_ deviceID: DeviceID) async throws {
+        try await call { try $0.dismissPendingDevice(deviceID) }
+    }
+
+    public func dismissPendingFolder(_ folder: PendingFolder) async throws {
+        try await call { try $0.dismissPendingFolder(folder.folderID, deviceID: folder.offeredBy) }
+    }
+
+    // MARK: - Maintenance
+
+    public func folderVersions(_ folderID: FolderID) async throws -> [String: [FileVersion]] {
+        try await json([String: [FileVersion]]?.self) { $0.folderVersionsJSON(folderID, error: $1) } ?? [:]
+    }
+
+    public func restoreVersions(_ folderID: FolderID, _ versions: [String: FileVersion]) async throws -> [String: String] {
+        let payload = String(decoding: try JSONEncoder().encode(versions.mapValues(\.versionTimeRaw)), as: UTF8.self)
+        return try await json([String: String]?.self) { $0.restoreVersionsJSON(folderID, versionsJSON: payload, error: $1) } ?? [:]
+    }
+
+    public func ignores(_ folderID: FolderID) async throws -> IgnorePatterns {
+        try await json { $0.ignoresJSON(folderID, error: $1) }
+    }
+
+    public func setIgnores(_ folderID: FolderID, lines: [String]) async throws {
+        let payload = String(decoding: try JSONEncoder().encode(lines), as: UTF8.self)
+        try await call { try $0.setIgnoresJSON(folderID, linesJSON: payload) }
+    }
+
+    public func override(_ folderID: FolderID) async throws { try await call { try $0.override(folderID) } }
+    public func revert(_ folderID: FolderID) async throws { try await call { try $0.revert(folderID) } }
+
+    // MARK: - Log
+
+    public func systemErrors() async throws -> [LogEntry] {
+        let r: LogResponse = try await json { $0.errorsJSON($1) }
+        return r.entries
+    }
+
+    public func clearSystemErrors() async throws { try await call { $0.clearErrors() } }
+
+    public func systemLog() async throws -> [LogEntry] {
+        let r: LogResponse = try await json { $0.logJSON($1) }
+        return r.entries
+    }
+
     // MARK: - Events
 
     public func events(since: Int, limit: Int?, timeout: Int) async throws -> [SyncthingEvent] {

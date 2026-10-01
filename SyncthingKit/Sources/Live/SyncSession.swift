@@ -156,6 +156,7 @@ public final class SyncSession {
     }
 
     private func refreshSlowData() async {
+        if let errors = try? await client.systemErrors() { state.systemErrors = errors }
         if let stats = try? await client.deviceStats() { state.deviceStats = stats }
         if let stats = try? await client.folderStats() {
             state.folderStats.merge(stats) { _, new in new }
@@ -354,7 +355,7 @@ public final class SyncSession {
                 let wanted = folderIDs.contains(folder.id)
                 guard shared != wanted else { continue }
                 let devices = wanted ? folder.deviceIDs + [draft.deviceID] : folder.deviceIDs.filter { $0 != draft.deviceID }
-                try await client.setFolder(FolderDraft.sharing(folder.id, with: devices))
+                try await client.setFolder(FolderDraft.sharing(folder, with: devices))
             }
         }
         if ok {
@@ -374,7 +375,8 @@ public final class SyncSession {
     /// Sets the devices a folder is shared with.
     @discardableResult
     public func setSharing(folder folderID: FolderID, devices: Set<DeviceID>) async -> Bool {
-        let ok = await run { try await client.setFolder(FolderDraft.sharing(folderID, with: Array(devices))) }
+        guard let folder = state.folder(folderID) else { return false }
+        let ok = await run { try await client.setFolder(FolderDraft.sharing(folder, with: Array(devices))) }
         if ok { await refreshConfig() }
         return ok
     }
@@ -387,6 +389,55 @@ public final class SyncSession {
     }
 
     // MARK: - Pending requests
+
+    public func dismiss(_ device: PendingDevice) async {
+        let ok = await run { try await client.dismissPendingDevice(device.deviceID) }
+        if ok { state.pendingDevices.removeAll { $0.id == device.id } }
+    }
+
+    public func dismiss(_ folder: PendingFolder) async {
+        let ok = await run { try await client.dismissPendingFolder(folder) }
+        if ok { state.pendingFolders.removeAll { $0.id == folder.id } }
+    }
+
+    // MARK: - Maintenance
+
+    public func clearSystemErrors() async {
+        let ok = await run { try await client.clearSystemErrors() }
+        if ok { state.systemErrors = [] }
+    }
+
+    public func loadVersions(_ folderID: FolderID) async throws -> [String: [FileVersion]] {
+        try await client.folderVersions(folderID)
+    }
+
+    /// Restores one file version; returns false (and sets `actionError`) on failure.
+    @discardableResult
+    public func restore(_ path: String, version: FileVersion, in folderID: FolderID) async -> Bool {
+        var failure: String?
+        let ok = await run { failure = try await client.restoreVersions(folderID, [path: version])[path] }
+        if let failure { actionError = .engine(failure); return false }
+        return ok
+    }
+
+    public func loadIgnores(_ folderID: FolderID) async throws -> IgnorePatterns {
+        try await client.ignores(folderID)
+    }
+
+    @discardableResult
+    public func saveIgnores(_ folderID: FolderID, lines: [String]) async -> Bool {
+        let ok = await run { try await client.setIgnores(folderID, lines: lines) }
+        if ok { await rescan(folder: folderID) }
+        return ok
+    }
+
+    public func overrideRemoteChanges(_ folderID: FolderID) async {
+        await run { try await client.override(folderID) }
+    }
+
+    public func revertLocalChanges(_ folderID: FolderID) async {
+        await run { try await client.revert(folderID) }
+    }
 
     public func ignore(_ device: PendingDevice) async {
         let ok = await run { try await client.ignorePendingDevice(device.deviceID) }

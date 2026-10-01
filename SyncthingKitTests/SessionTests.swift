@@ -135,6 +135,33 @@ final class SyncSessionTests: XCTestCase {
         XCTAssertNil(session.state.folder("abc"))
     }
 
+    func testMaintenanceActions() async throws {
+        let mock = await makeMock()
+        await mock.configure { m in m.errors = [LogEntry(when: nil, message: "disk full")] }
+        let session = makeSession(mock)
+        try await session.fullRefresh()
+        XCTAssertEqual(session.state.systemErrors.map(\.message), ["disk full"])
+        await session.clearSystemErrors()
+        XCTAssertTrue(session.state.systemErrors.isEmpty)
+
+        do { let ok = await session.saveIgnores("photos", lines: ["*.tmp"]); XCTAssertTrue(ok) }
+        let ignores = try await session.loadIgnores("photos")
+        XCTAssertEqual(ignores.lines, ["*.tmp"])
+
+        let version = FileVersion(versionTime: .now, versionTimeRaw: "2024-01-01T00:00:00Z")
+        do { let ok = await session.restore("a.txt", version: version, in: "photos"); XCTAssertTrue(ok) }
+        await session.dismiss(PendingDevice(deviceID: "NEW"))
+        XCTAssertTrue(session.state.pendingDevices.isEmpty)
+        await session.overrideRemoteChanges("photos")
+        await session.revertLocalChanges("photos")
+
+        let calls = await mock.calls
+        for expected in ["clearErrors", "setIgnores photos", "scan photos", "restore photos a.txt", "dismissDevice NEW",
+                         "override photos", "revert photos"] {
+            XCTAssertTrue(calls.contains(expected), expected)
+        }
+    }
+
     func testIsSyncIdle() {
         var s = NodeState()
         s.status = SystemStatus(myID: MockData.myID)
@@ -161,7 +188,60 @@ final class DraftTests: XCTestCase {
         let accept = FolderDraft(accepting: PendingFolder(folderID: "x", offeredBy: "MAC", label: "L", receiveEncrypted: true), path: "/q")
         XCTAssertEqual(accept.type, "receiveencrypted")
         XCTAssertEqual(accept.deviceIDs, ["MAC"])
-        XCTAssertEqual(FolderDraft.sharing("f", with: ["A", "B"]), ["id": "f", "devices": [["deviceID": "A"], ["deviceID": "B"]]])
+        XCTAssertEqual(FolderDraft.sharing(FolderConfig(id: "f"), with: ["A", "B"]),
+                       ["id": "f", "devices": [["deviceID": "A"], ["deviceID": "B"]]])
+    }
+
+    func testSharingKeepsEncryptionPasswords() {
+        let folder = FolderConfig(id: "f", deviceIDs: ["A", "U"], encryptionPasswords: ["U": "secret"])
+        XCTAssertEqual(FolderDraft.sharing(folder, with: ["A", "U", "B"]),
+                       ["id": "f", "devices": [["deviceID": "A"], ["deviceID": "U", "encryptionPassword": "secret"], ["deviceID": "B"]]])
+    }
+
+    func testFolderDraftVersioningAndPasswords() {
+        var draft = FolderDraft(id: "x", path: "/p", deviceIDs: ["U"], encryptionPasswords: ["U": "pw"])
+        XCTAssertNil(draft.json["versioning"], "unchanged unless set")
+        draft.versioning = Versioning(type: "trashcan", params: ["cleanoutDays": "30"])
+        XCTAssertEqual(draft.json["versioning"], ["type": "trashcan", "params": ["cleanoutDays": "30"]])
+        XCTAssertEqual(draft.json["devices"], [["deviceID": "U", "encryptionPassword": "pw"]])
+    }
+
+    func testDeviceDraftLimitsAndIntroducer() {
+        let json = DeviceDraft(deviceID: "D", introducer: true, maxSendKbps: 100, maxRecvKbps: 0).json
+        XCTAssertEqual(json["introducer"], true)
+        XCTAssertEqual(json["maxSendKbps"], 100)
+        XCTAssertEqual(json["maxRecvKbps"], 0)
+    }
+
+    func testConflictNames() {
+        XCTAssertTrue(ConflictName.isConflict("report.sync-conflict-20240101-120000-ABCDEFG.pdf"))
+        XCTAssertFalse(ConflictName.isConflict("report.pdf"))
+        XCTAssertEqual(ConflictName.original(of: "report.sync-conflict-20240101-120000-ABCDEFG.pdf"), "report.pdf")
+        XCTAssertEqual(ConflictName.original(of: "notes.sync-conflict-20240101-120000-ABCDEFG"), "notes")
+        XCTAssertEqual(ConflictName.original(of: "a.tar.sync-conflict-20240101-120000-ABCDEFG.gz"), "a.tar.gz")
+        XCTAssertNil(ConflictName.original(of: "plain.txt"))
+    }
+
+    func testMaintenanceModelsDecode() throws {
+        let config = try JSONDecoder().decode(FolderConfig.self, from: Data(#"""
+            {"id":"f","devices":[{"deviceID":"A","encryptionPassword":""},{"deviceID":"U","encryptionPassword":"pw"}],
+             "versioning":{"type":"staggered","params":{"maxAge":"31536000"},"cleanupIntervalS":3600}}
+            """#.utf8))
+        XCTAssertEqual(config.encryptionPasswords, ["U": "pw"])
+        XCTAssertEqual(config.versioning, Versioning(type: "staggered", params: ["maxAge": "31536000"]))
+
+        let versions = try JSONDecoder().decode([String: [FileVersion]].self, from: Data(#"""
+            {"a/b.txt":[{"versionTime":"2024-01-01T12:00:00.123456789+01:00","modTime":"2023-12-31T10:00:00Z","size":42}]}
+            """#.utf8))
+        let v = try XCTUnwrap(versions["a/b.txt"]?.first)
+        XCTAssertEqual(v.size, 42)
+        XCTAssertEqual(v.versionTimeRaw, "2024-01-01T12:00:00.123456789+01:00", "kept verbatim for restore")
+
+        let log = try JSONDecoder().decode(LogResponse.self, from: Data(#"{"errors":[{"when":"2024-01-01T00:00:00Z","message":"boom","level":8}]}"#.utf8))
+        XCTAssertEqual(log.entries.first?.message, "boom")
+        XCTAssertTrue(log.entries.first?.isError ?? false)
+        let ignores = try JSONDecoder().decode(IgnorePatterns.self, from: Data(#"{"ignore":["*.tmp"],"expanded":null}"#.utf8))
+        XCTAssertEqual(ignores, IgnorePatterns(lines: ["*.tmp"]))
     }
 
     func testGeneratedFolderIDFormat() {
@@ -198,5 +278,31 @@ func waitUntil(timeout: TimeInterval = 5, _ condition: @MainActor () -> Bool) as
     while !condition() {
         if Date() > deadline { XCTFail("timed out"); return }
         try await Task.sleep(for: .milliseconds(20))
+    }
+}
+
+@MainActor
+final class NetworkPolicyTests: XCTestCase {
+    func testDecision() {
+        XCTAssertTrue(NetworkPolicy.allows(wifiOnly: false, respectLowDataMode: false, expensive: true, constrained: true))
+        XCTAssertFalse(NetworkPolicy.allows(wifiOnly: true, respectLowDataMode: false, expensive: true, constrained: false))
+        XCTAssertTrue(NetworkPolicy.allows(wifiOnly: true, respectLowDataMode: false, expensive: false, constrained: false))
+        XCTAssertFalse(NetworkPolicy.allows(wifiOnly: false, respectLowDataMode: true, expensive: false, constrained: true))
+    }
+
+    func testPolicyPersistsAndNotifies() {
+        let defaults = UserDefaults(suiteName: "net-\(UUID().uuidString)")!
+        let policy = NetworkPolicy(defaults: defaults, monitorPath: false)
+        XCTAssertFalse(policy.wifiOnly, "cellular allowed by default")
+        XCTAssertTrue(policy.respectLowDataMode)
+        var changes = 0
+        policy.onChange = { changes += 1 }
+        policy.wifiOnly = true
+        XCTAssertTrue(policy.allowsSync, "still on Wi-Fi")
+        policy.update(expensive: true, constrained: false)
+        XCTAssertFalse(policy.allowsSync)
+        XCTAssertNotNil(policy.blockReason)
+        XCTAssertEqual(changes, 2)
+        XCTAssertTrue(NetworkPolicy(defaults: defaults, monitorPath: false).wifiOnly, "setting persists")
     }
 }

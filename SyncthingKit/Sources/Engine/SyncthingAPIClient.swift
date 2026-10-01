@@ -47,8 +47,28 @@ public protocol SyncthingAPIClient: Sendable {
     // Pending
     func pendingDevices() async throws -> [PendingDevice]
     func pendingFolders() async throws -> [PendingFolder]
+    /// Permanently ignores (recorded in config).
     func ignorePendingDevice(_ deviceID: DeviceID) async throws
     func ignorePendingFolder(_ folder: PendingFolder) async throws
+    /// Forgets the request; it reappears if the device asks again.
+    func dismissPendingDevice(_ deviceID: DeviceID) async throws
+    func dismissPendingFolder(_ folder: PendingFolder) async throws
+
+    // Maintenance
+    func folderVersions(_ folderID: FolderID) async throws -> [String: [FileVersion]]
+    /// Restores the given file → version; returns paths that failed with their error.
+    func restoreVersions(_ folderID: FolderID, _ versions: [String: FileVersion]) async throws -> [String: String]
+    func ignores(_ folderID: FolderID) async throws -> IgnorePatterns
+    func setIgnores(_ folderID: FolderID, lines: [String]) async throws
+    /// Send-only folders: make the local state authoritative.
+    func override(_ folderID: FolderID) async throws
+    /// Receive-only folders: discard local changes.
+    func revert(_ folderID: FolderID) async throws
+
+    // Log
+    func systemErrors() async throws -> [LogEntry]
+    func clearSystemErrors() async throws
+    func systemLog() async throws -> [LogEntry]
 
     // Events (long-poll). Blocks up to `timeout` seconds when there are none.
     func events(since: Int, limit: Int?, timeout: Int) async throws -> [SyncthingEvent]

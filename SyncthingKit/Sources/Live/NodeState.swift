@@ -35,6 +35,7 @@ public struct NodeState: Sendable, Equatable {
     /// Completion of each folder on each remote device, from `FolderCompletion` events.
     public var remoteFolderCompletion: [DeviceID: [FolderID: Completion]] = [:]
 
+    public var systemErrors: [LogEntry] = []
     public var pendingDevices: [PendingDevice] = []
     public var pendingFolders: [PendingFolder] = []
 
