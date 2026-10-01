@@ -123,7 +123,14 @@ xcrun simctl launch booted xyz.santacroce.SuperSynch -DemoMode -DemoSection fold
   - Index database: `Application Support/Syncthing/data`, excluded from backup because it can be rebuilt.
 - Dismissing a pending request **ignores** it in config, like the web GUI's *Ignore*.
 - Bundle ID: `xyz.santacroce.SuperSynch`.
-- Syncthing is MPL-2.0. The app links it unmodified; the source is at github.com/syncthing/syncthing.
 
 ## Roadmap
 On-demand files (download individual files via the bridge's block API) and a File Provider extension, per-folder advanced settings, widgets, testing on physical devices, and requesting the multicast entitlement for local discovery.
+
+## License
+
+SuperSynch is open source under the **[Mozilla Public License 2.0](LICENSE)**, the same license as Syncthing.
+
+The app embeds Syncthing v2.1.5 and its Go dependencies unmodified, each under its own license (MPL-2.0, MIT, BSD, Apache-2.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The app's *Settings › About* screen links to this repository and to those notices.
+
+"Syncthing" is a trademark of the Syncthing Foundation. SuperSynch is an independent project and is not affiliated with or endorsed by the Syncthing Foundation.

@@ -45,6 +45,7 @@ SuperSynch/    SwiftUI views only + App/BackgroundSync.swift (BGTaskScheduler, f
 - iOS background: never assume the engine is running. Every client call can throw `.notRunning`.
 - `AppModel` runs the engine only while active/background-syncing AND `NetworkPolicy.allowsSync` (Wi-Fi only / Low Data Mode).
 - The simulator build listens on port 22010 (`AppEnvironment.simulatorOptions`) to avoid the host's Syncthing.
+- License: MPL-2.0 (same as Syncthing). When Go dependencies change, regenerate THIRD_PARTY_NOTICES.md from `go list -tags noassets -deps ./stbridge` and check that no GPL/LGPL code was added.
 - No telemetry or secrets. The device key lives in the app container (`Application Support/Syncthing/config`).
 - UI strings: SwiftUI literals in the app. In the framework, use `String(localized:bundle: SyncthingKit.bundle)`.
 - Use semantic colours, and respect Reduce Motion.

@@ -74,10 +74,16 @@ struct SettingsView: View {
                 }
             }
 
-            Section("About") {
+            Section {
                 InfoRow(title: "Syncthing", value: session.state.version?.version ?? "–")
                 if let id = app.deviceID { DeviceIDRow(deviceID: id) }
-                Link("Syncthing is open source (MPL-2.0)", destination: URL(string: "https://github.com/syncthing/syncthing")!)
+                Link("SuperSynch Source Code (MPL-2.0)", destination: URL(string: "https://github.com/santacroce-tech/supersynch")!)
+                Link("Syncthing Source Code (MPL-2.0)", destination: URL(string: "https://github.com/syncthing/syncthing")!)
+                Link("Third-Party Notices", destination: URL(string: "https://github.com/santacroce-tech/supersynch/blob/main/THIRD_PARTY_NOTICES.md")!)
+            } header: {
+                Text("About")
+            } footer: {
+                Text("SuperSynch is open source under the Mozilla Public License 2.0. Syncthing is a trademark of the Syncthing Foundation; SuperSynch is not affiliated with or endorsed by it.")
             }
         }
         .navigationTitle("Settings")
