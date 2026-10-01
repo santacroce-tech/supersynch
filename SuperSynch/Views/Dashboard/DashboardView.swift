@@ -17,6 +17,7 @@ struct DashboardView: View {
             identitySection
             transferSection
             attentionSection
+            errorsSection
             controlsSection
         }
         .navigationTitle("This Device")
@@ -95,6 +96,25 @@ struct DashboardView: View {
                 NavigationLink(value: Route.folder(folder.id)) {
                     FolderRow(folder: folder, session: session)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder private var errorsSection: some View {
+        if !state.systemErrors.isEmpty {
+            Section {
+                ForEach(state.systemErrors.suffix(5).reversed(), id: \.self) { error in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(error.message).font(.callout)
+                        if let when = error.when {
+                            Text(when, format: .dateTime).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                NavigationLink(value: DetailRoute.log) { Text("Show All") }
+                Button("Clear Errors", role: .destructive) { Task { await session.clearSystemErrors() } }
+            } header: {
+                Label("Errors", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
             }
         }
     }

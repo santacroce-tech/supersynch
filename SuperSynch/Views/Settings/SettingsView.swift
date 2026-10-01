@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State private var globalDiscovery = true
     @State private var localDiscovery = true
     @State private var relays = true
+    @State private var maxSend = 0
+    @State private var maxRecv = 0
     @State private var loaded = false
 
     var body: some View {
@@ -22,6 +24,27 @@ struct SettingsView: View {
             } footer: {
                 Text("How this iPhone appears on your other devices.")
             }
+
+            Section {
+                @Bindable var network = app.network
+                Toggle("Sync on Wi-Fi Only", isOn: $network.wifiOnly)
+                Toggle("Pause in Low Data Mode", isOn: $network.respectLowDataMode)
+            } header: {
+                Text("Data Usage")
+            } footer: {
+                Text("With Wi-Fi only on, syncing pauses on cellular and personal hotspots and resumes automatically on Wi-Fi.")
+            }
+
+            Section {
+                LimitField(title: "Upload Limit", value: $maxSend)
+                LimitField(title: "Download Limit", value: $maxRecv)
+            } header: {
+                Text("Bandwidth")
+            } footer: {
+                Text("Applies to all devices. 0 means unlimited.")
+            }
+            .onChange(of: maxSend) { saveOptions() }
+            .onChange(of: maxRecv) { saveOptions() }
 
             Section {
                 Toggle("Global Discovery", isOn: $globalDiscovery)
@@ -45,6 +68,12 @@ struct SettingsView: View {
             }
             .font(.callout)
 
+            Section("Diagnostics") {
+                NavigationLink(value: DetailRoute.log) {
+                    Label("Warnings & Errors", systemImage: "list.bullet.rectangle")
+                }
+            }
+
             Section("About") {
                 InfoRow(title: "Syncthing", value: session.state.version?.version ?? "–")
                 if let id = app.deviceID { DeviceIDRow(deviceID: id) }
@@ -62,6 +91,8 @@ struct SettingsView: View {
             globalDiscovery = options["globalAnnounceEnabled"] == .bool(true)
             localDiscovery = options["localAnnounceEnabled"] == .bool(true)
             relays = options["relaysEnabled"] == .bool(true)
+            if case .number(let n)? = options["maxSendKbps"] { maxSend = Int(n) }
+            if case .number(let n)? = options["maxRecvKbps"] { maxRecv = Int(n) }
         }
         loaded = true
     }
@@ -72,6 +103,8 @@ struct SettingsView: View {
             "globalAnnounceEnabled": .bool(globalDiscovery),
             "localAnnounceEnabled": .bool(localDiscovery),
             "relaysEnabled": .bool(relays),
+            "maxSendKbps": .number(Double(max(0, maxSend))),
+            "maxRecvKbps": .number(Double(max(0, maxRecv))),
         ]
         Task {
             do { try await session.client.setOptions(patch) } catch { session.actionError = SyncthingError(error) }

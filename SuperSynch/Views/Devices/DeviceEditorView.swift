@@ -15,6 +15,9 @@ struct DeviceEditorView: View {
     @State private var addressMode = AddressMode.dynamic
     @State private var address = ""
     @State private var sharedFolders: Set<FolderID> = []
+    @State private var introducer = false
+    @State private var limitSend = 0
+    @State private var limitRecv = 0
     @State private var scanning = false
     @State private var saving = false
 
@@ -77,6 +80,16 @@ struct DeviceEditorView: View {
                     Text("Automatic uses Syncthing's discovery. If the devices can't find each other on your network, enter the Mac's address (e.g. tcp://192.168.1.20:22000).")
                 }
 
+                Section {
+                    Toggle("Introducer", isOn: $introducer)
+                    LimitField(title: "Upload Limit", value: $limitSend)
+                    LimitField(title: "Download Limit", value: $limitRecv)
+                } header: {
+                    Text("Advanced")
+                } footer: {
+                    Text("An introducer's other devices and shared folders are added automatically. Limits are in KiB/s; 0 means unlimited.")
+                }
+
                 if !session.state.folders.isEmpty {
                     Section("Share Folders") {
                         ForEach(session.state.folders) { folder in
@@ -123,6 +136,9 @@ struct DeviceEditorView: View {
                 address = manual.joined(separator: ", ")
             }
             sharedFolders = Set(session.state.folders(sharedWith: existing.deviceID).map(\.id))
+            introducer = existing.introducer
+            limitSend = existing.maxSendKbps
+            limitRecv = existing.maxRecvKbps
         } else if let prefill {
             idText = prefill.deviceID
             name = prefill.name
@@ -136,7 +152,26 @@ struct DeviceEditorView: View {
         let addresses = addressMode == .dynamic
             ? ["dynamic"]
             : address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        let draft = DeviceDraft(deviceID: id, name: name.trimmingCharacters(in: .whitespaces), addresses: addresses)
+        let draft = DeviceDraft(deviceID: id, name: name.trimmingCharacters(in: .whitespaces), addresses: addresses,
+                                introducer: introducer, maxSendKbps: limitSend, maxRecvKbps: limitRecv)
         if await session.saveDevice(draft, sharing: sharedFolders) { dismiss() }
+    }
+}
+
+/// A KiB/s limit with 0 meaning unlimited.
+struct LimitField: View {
+    let title: LocalizedStringKey
+    @Binding var value: Int
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: 6) {
+                TextField("Unlimited", value: $value, format: .number)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 100)
+                Text("KiB/s").foregroundStyle(.secondary)
+            }
+        }
     }
 }

@@ -36,6 +36,17 @@ struct SuperSynchApp: App {
 }
 
 enum AppEnvironment {
+    /// The simulator shares the Mac's network stack. Use a different sync
+    /// port so it never collides with a Syncthing already running on the Mac
+    /// (default port 22000). Real devices use Syncthing's defaults.
+    static var simulatorOptions: JSONValue? {
+        #if targetEnvironment(simulator)
+        ["listenAddresses": ["tcp://:22010", "quic://:22010", "dynamic+https://relays.syncthing.net/endpoint"]]
+        #else
+        nil
+        #endif
+    }
+
     /// `-DemoMode` launches against in-memory sample data (no engine), for
     /// screenshots and UI checks in the simulator.
     static var isDemo: Bool { ProcessInfo.processInfo.arguments.contains("-DemoMode") }
@@ -46,7 +57,7 @@ enum AppEnvironment {
             return AppModel(session: SyncSession(client: MockSyncthingAPIClient(preloaded: MockData.state)))
         }
         do {
-            let model = AppModel(engine: try SyncEngine(deviceName: UIDevice.current.name))
+            let model = AppModel(engine: try SyncEngine(deviceName: UIDevice.current.name, startupOptions: simulatorOptions))
             BackgroundSync.model = model
             return model
         } catch {

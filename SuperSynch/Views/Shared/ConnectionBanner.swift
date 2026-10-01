@@ -11,6 +11,8 @@ struct ConnectionBanner: View {
             banner(color: .red, systemImage: "exclamationmark.triangle.fill") {
                 Text("Syncthing couldn't be set up: \(error)")
             }
+        } else if app.engine != nil, let reason = app.network.blockReason {
+            banner(color: .orange, systemImage: "wifi.slash") { Text(reason) }
         } else if case .failed(let message)? = app.engine?.status {
             banner(color: .red, systemImage: "exclamationmark.triangle.fill") {
                 VStack(alignment: .leading, spacing: 6) {

@@ -25,7 +25,8 @@ struct PendingView: View {
                                 Text("Requested \(Format.relative(time))").font(.caption).foregroundStyle(.secondary)
                             }
                             actions(accept: { acceptingDevice = device },
-                                    dismiss: { Task { await session.ignore(device) } })
+                                    dismiss: { Task { await session.dismiss(device) } },
+                                    ignore: { Task { await session.ignore(device) } })
                         }
                         .padding(.vertical, 2)
                     }
@@ -42,7 +43,8 @@ struct PendingView: View {
                                 Label("Encrypted", systemImage: "lock.fill").font(.caption).foregroundStyle(.secondary)
                             }
                             actions(accept: { acceptingFolder = folder },
-                                    dismiss: { Task { await session.ignore(folder) } })
+                                    dismiss: { Task { await session.dismiss(folder) } },
+                                    ignore: { Task { await session.ignore(folder) } })
                         }
                         .padding(.vertical, 2)
                     }
@@ -65,10 +67,16 @@ struct PendingView: View {
         }
     }
 
-    private func actions(accept: @escaping () -> Void, dismiss: @escaping () -> Void) -> some View {
+    private func actions(accept: @escaping () -> Void, dismiss: @escaping () -> Void,
+                         ignore: @escaping () -> Void) -> some View {
         HStack {
             Button("Add…", action: accept).buttonStyle(.borderedProminent)
-            Button("Ignore", role: .destructive, action: dismiss).buttonStyle(.bordered)
+            Button("Dismiss", action: dismiss).buttonStyle(.bordered)
+            Menu {
+                Button("Ignore Permanently", role: .destructive, action: ignore)
+            } label: {
+                Image(systemName: "ellipsis.circle").accessibilityLabel(Text("More"))
+            }
         }
         .controlSize(.small)
         .padding(.top, 4)

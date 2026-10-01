@@ -49,6 +49,10 @@ enum DetailRoute: Hashable {
     case outOfSync(FolderID)
     /// Browse a synced folder's files; `subpath` is relative to the folder root.
     case browse(FolderID, subpath: String)
+    case ignores(FolderID)
+    case versions(FolderID)
+    case conflicts(FolderID)
+    case log
 }
 
 /// Resolves a `Route` to its detail view. Shared by both idioms.
@@ -72,6 +76,10 @@ struct DetailRouteDestination: View {
         switch route {
         case .outOfSync(let id): OutOfSyncView(session: session, folderID: id)
         case .browse(let id, let subpath): FileBrowserView(session: session, folderID: id, subpath: subpath)
+        case .ignores(let id): IgnorePatternsView(session: session, folderID: id)
+        case .versions(let id): VersionsView(session: session, folderID: id)
+        case .conflicts(let id): ConflictsView(session: session, folderID: id)
+        case .log: LogView(session: session)
         }
     }
 }

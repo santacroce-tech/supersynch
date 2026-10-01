@@ -99,6 +99,35 @@ struct FolderDetailView: View {
                 }
             }
 
+            Section("Manage") {
+                NavigationLink(value: DetailRoute.ignores(folderID)) {
+                    Label("Ignore Patterns", systemImage: "eye.slash")
+                }
+                .disabled(folder.paused)
+                if !folder.versioning.type.isEmpty {
+                    NavigationLink(value: DetailRoute.versions(folderID)) {
+                        Label("File Versions", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+                NavigationLink(value: DetailRoute.conflicts(folderID)) {
+                    Label("Conflicts", systemImage: "exclamationmark.2")
+                }
+                if folder.type == "sendonly", let status, status.needTotalItems > 0 {
+                    Button {
+                        Task { await session.overrideRemoteChanges(folderID) }
+                    } label: {
+                        Label("Override Changes", systemImage: "arrow.up.circle")
+                    }
+                }
+                if folder.type == "receiveonly", let status, status.receiveOnlyTotalItems > 0 {
+                    Button(role: .destructive) {
+                        Task { await session.revertLocalChanges(folderID) }
+                    } label: {
+                        Label("Revert Local Changes", systemImage: "arrow.uturn.backward.circle")
+                    }
+                }
+            }
+
             Section("Details") {
                 InfoRow(title: "Folder ID", value: folder.id, monospaced: true)
                 InfoRow(title: "Path", value: folder.path, monospaced: true)
@@ -109,6 +138,7 @@ struct FolderDetailView: View {
                 }
                 InfoRow(title: "Rescan Interval", value: Format.uptime(seconds: folder.rescanIntervalS))
                 InfoRow(title: "File Watcher", value: folder.fsWatcherEnabled ? String(localized: "Enabled") : String(localized: "Disabled"))
+                InfoRow(title: "Versioning", value: VersioningOption(folder.versioning).title)
             }
 
             let shared = folder.deviceIDs.filter { $0 != session.state.myID }
