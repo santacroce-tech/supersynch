@@ -57,7 +57,7 @@
   }
   a { color: var(--accent-text); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  img { max-width: 100%; display: block; }
+  img { max-width: 100%; height: auto; display: block; }
   code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
   .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
   @media (max-width: 600px) { .wrap { padding: 0 16px; } }
@@ -120,7 +120,7 @@
     .devices .phone:nth-child(2) { transform: translateY(28px); }
   }
   .tablet {
-    width: 100%; max-width: 380px; justify-self: center;
+    width: 100%; max-width: 520px; justify-self: center;
     border-radius: 30px; padding: 12px; background: #0d0f12;
     box-shadow: var(--shadow), inset 0 0 0 1.5px #2a2f36;
   }
@@ -186,6 +186,26 @@
   .pair .phone { width: 230px; }
   @media (max-width: 600px) { .pair .phone { width: 46%; } }
 
+  /* Platforms */
+  .platforms { display: grid; grid-template-columns: 1.1fr .9fr; gap: 40px; align-items: start; }
+  @media (max-width: 900px) { .platforms { grid-template-columns: 1fr; } }
+  .platforms > * { min-width: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 26px; padding: 0; list-style: none; }
+  .chips li {
+    display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px;
+    background: var(--card); border: 1px solid var(--line); font-weight: 600; font-size: 15px;
+  }
+  .chips svg { width: 18px; height: 18px; color: var(--accent); flex: none; }
+  .community { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .community li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .community strong { display: block; }
+  .community span { color: var(--muted); font-size: 15px; }
+  .callout {
+    margin-top: 26px; padding: 20px 22px; border-radius: var(--radius);
+    background: var(--accent-soft); color: var(--text);
+  }
+  .callout p { margin: 0 0 14px; }
+
   /* Notes */
   .notes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
   @media (max-width: 760px) { .notes { grid-template-columns: 1fr; } }
@@ -223,6 +243,7 @@
       <ul>
         <li><a href="#features">Features</a></li>
         <li><a href="#how">How it works</a></li>
+        <li><a href="#everywhere">Platforms</a></li>
         <li><a href="#limits">Good to know</a></li>
         <li><a href="#build">Build</a></li>
         <li class="keep"><a href="https://github.com/santacroce-tech/supersynch">GitHub</a></li>
@@ -237,7 +258,7 @@
       <div>
         <span class="eyebrow">For iPhone &amp; iPad · powered by Syncthing</span>
         <h1>Your files, synced.<br><span class="accent">No cloud in between.</span></h1>
-        <p class="lead">SuperSynch runs Syncthing on your iPhone and iPad, so your phone becomes a real Syncthing device. It syncs folders directly with your Mac, peer to peer and end-to-end encrypted.</p>
+        <p class="lead">SuperSynch runs <a href="https://syncthing.net/">Syncthing</a> on your iPhone and iPad, so your phone becomes a real Syncthing device. It syncs folders directly with your Mac, or any computer running Syncthing, peer to peer and end-to-end encrypted.</p>
         <div class="cta">
           <a class="btn primary" href="https://github.com/santacroce-tech/supersynch">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -350,9 +371,51 @@
     </div>
   </section>
 
-  <section class="soft">
+  <section id="everywhere" class="soft">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Works with Syncthing everywhere</div>
+        <h2>Your iPhone joins the devices you already have.</h2>
+        <p><a href="https://syncthing.net/">Syncthing</a> is a free, open-source file synchronization program that runs on all major platforms. SuperSynch uses Syncthing's standard Block Exchange Protocol, so your iPhone and iPad can sync with any Syncthing device, not just a Mac.</p>
+      </div>
+      <div class="platforms">
+        <div>
+          <h3 style="margin:0 0 14px;font-size:18px">Official Syncthing downloads</h3>
+          <ul class="chips" aria-label="Platforms with official Syncthing downloads">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M1 20h22"/></svg>macOS</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18M12 3v18"/></svg>Windows</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg>Linux</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg>FreeBSD</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg>OpenBSD</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg>NetBSD</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/></svg>illumos</li>
+          </ul>
+          <p style="color:var(--muted);margin:0">That covers your laptop and desktop, as well as home servers, NAS boxes, a Raspberry Pi or a VPS: keep a folder on your iPhone in sync with any of them, or with several at once.</p>
+          <div class="callout">
+            <p><strong>New to Syncthing?</strong> Install it on your computer first, then pair it with SuperSynch. Downloads and docs are on the official site.</p>
+            <div class="cta">
+              <a class="btn primary" href="https://syncthing.net/downloads/">Get Syncthing</a>
+              <a class="btn ghost" href="https://docs.syncthing.net/intro/getting-started.html">Getting started guide</a>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin:0 0 14px;font-size:18px">Community apps</h3>
+          <ul class="community">
+            <li><strong><a href="https://github.com/syncthing/syncthing-macos">syncthing-macos</a></strong><span>A native macOS app bundle that runs Syncthing from the menu bar.</span></li>
+            <li><strong><a href="https://github.com/researchxxl/syncthing-android">Syncthing-Fork</a></strong><span>Syncthing for Android phones and tablets.</span></li>
+            <li><strong><a href="https://github.com/GermanCoding/SyncTrayzor">SyncTrayzor</a></strong><span>A Windows tray app that hosts and wraps Syncthing.</span></li>
+            <li><strong><a href="https://docs.syncthing.net/users/contrib.html">More integrations</a></strong><span>Browse the Syncthing community contributions page for GUIs, packages and tools.</span></li>
+          </ul>
+          <p style="color:var(--muted);font-size:14px;margin:14px 0 0">These are community projects listed by the Syncthing docs, and aren't part of SuperSynch.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
     <div class="wrap split">
-      <div class="tablet"><img src="images/ipad-folders.png" alt="iPad split view showing the folders list and the Photos folder's details" width="965" height="1400" loading="lazy"></div>
+      <div class="tablet"><img src="images/ipad-folders.png" alt="iPad split view showing the folders list and the Photos folder's details" width="965" height="960" loading="lazy"></div>
       <div>
         <div class="kicker">iPad</div>
         <h2>Room to see everything.</h2>
@@ -366,7 +429,7 @@
     </div>
   </section>
 
-  <section>
+  <section class="soft">
     <div class="wrap split">
       <div>
         <div class="kicker">Native</div>
@@ -385,7 +448,7 @@
     </div>
   </section>
 
-  <section id="limits" class="soft">
+  <section id="limits">
     <div class="wrap">
       <div class="section-head">
         <div class="kicker">Good to know</div>
@@ -413,7 +476,7 @@
     </div>
   </section>
 
-  <section id="build">
+  <section id="build" class="soft">
     <div class="wrap split">
       <div>
         <div class="kicker">Build from source</div>
@@ -447,7 +510,7 @@
 <footer>
   <div class="wrap">
     <p>Syncthing is a trademark of the Syncthing Foundation. SuperSynch is an independent project and is not affiliated with or endorsed by the Syncthing Foundation. The embedded Syncthing is open source under the <a href="https://github.com/syncthing/syncthing/blob/main/LICENSE">MPL-2.0</a>.</p>
-    <p>© 2026 <a href="https://github.com/santacroce-tech">Santacroce Tech</a></p>
+    <p><a href="https://syncthing.net/">syncthing.net</a> · <a href="https://github.com/santacroce-tech/supersynch">Source on GitHub</a> · © 2026 <a href="https://github.com/santacroce-tech">Santacroce Tech</a></p>
   </div>
 </footer>
 
