@@ -13,10 +13,15 @@ SuperSynch runs **[Syncthing](https://syncthing.net) on your iPhone and iPad**, 
 | Area | What you get |
 |---|---|
 | Pairing | This device's ID as a QR code (copy/share). Add your Mac by pasting or **scanning** its ID; addresses can be automatic (discovery) or manual (`tcp://macbook.local:22000`). |
-| Folders | Create folders, accept folders your Mac offers, choose which devices to share with, send-receive / send-only / receive-only, pause/resume, rescan, remove. Detail view shows sync state, counts, out-of-sync items, failed items and per-device completion. |
+| Folders | Create folders, accept folders your Mac offers, choose which devices to share with, send-receive / send-only / receive-only, pause/resume, rescan, remove. Detail view shows sync state, counts, out-of-sync items, failed items, per-device completion, last scan and last synced file. |
+| Selective sync | **Ignore patterns** editor per folder. Ignored files are never downloaded, so you can sync only part of a large folder. |
+| Versions & conflicts | **File versioning** (trash can, simple, staggered) with a browser to **restore** old versions. A **conflicts** list lets you keep either copy. **Override** (send-only) and **Revert** (receive-only). |
+| Untrusted devices | Share a folder **encrypted** with a password, so the other device stores data it can't read. |
 | Files | Synced folders live in **Files › On My iPhone › SuperSynch** and are usable from any app. There's also an in-app browser with Quick Look preview and sharing. You can also sync **into a folder you pick elsewhere** (security-scoped bookmark; see limitations). |
-| Devices | Connection state, address, completion, last seen, shared folders; pause/resume, edit, remove. |
-| Pending | Devices that try to connect and folders offered to you: **Add** or **Ignore**. |
+| Devices | Connection state, address, completion, **per-device transfer rates** and totals, last seen, shared folders; pause/resume, edit, remove. Per-device **bandwidth limits** and **introducer** setting. |
+| Pending | Devices that tried to connect (remembered even while the app was closed) and folders offered to you: **Add**, **Dismiss** or **Ignore permanently**. |
+| Data usage | **Sync on Wi-Fi only** (pauses on cellular and personal hotspots), pause in **Low Data Mode**, global bandwidth limits. |
+| Diagnostics | Syncthing's warnings and errors, with recent errors on the This Device screen. |
 | Live status | Syncthing's event stream drives the UI in real time, including transfer rates and sync progress. |
 | Background | Keeps syncing for a short while after you leave the app, then iOS-scheduled background syncs (see [Limitations](#limitations)). |
 | UX | Colour and icon per sync state, pull-to-refresh, empty states, error banners, Dark Mode, Dynamic Type, Reduce Motion, iPad keyboard shortcuts. |
@@ -34,7 +39,7 @@ If the two can't find each other on your network, set the Mac's address manually
 
 ## Limitations
 
-Read this before relying on SuperSynch. Some limits come from iOS, some from embedding Syncthing without its web GUI, and some reflect what has (and hasn't) been tested.
+Read this before relying on SuperSynch. Some limits come from iOS, some from embedding Syncthing, and some reflect what has (and hasn't) been tested.
 
 ### iOS platform limits
 - **No continuous background sync.** iOS doesn't let apps run continuously in the background, so the phone can't stay in sync around the clock the way two desktops do. SuperSynch syncs:
@@ -45,33 +50,29 @@ Read this before relying on SuperSynch. Some limits come from iOS, some from emb
   While the phone is offline, your Mac queues the changes; they sync the next time the app runs.
 - **No local (LAN) discovery yet.** Syncthing's local discovery uses UDP broadcasts. On iOS these need Apple's multicast networking entitlement, which Apple must approve. Until then, devices find each other through **global discovery** and **relays** (both on by default, so they need internet access), or through a **manual address** for your Mac (e.g. `tcp://192.168.1.20:22000`).
 - **Inbound connections only while running.** Your Mac can only connect to the phone while SuperSynch is syncing; otherwise the Mac shows the phone as disconnected. That's expected.
-- **Whole folders only.** Every file in a shared folder is downloaded to the phone, so large folders take matching storage. Selective or on-demand sync isn't implemented yet.
+- **No on-demand files.** Every file that isn't ignored is downloaded. Use ignore patterns to sync part of a folder; fetching individual files on demand, as iCloud Drive does, isn't implemented.
 - **Folders outside the app.** Syncing into a folder picked from another location works for local storage such as other apps' "On My iPhone" folders. Cloud-backed locations like iCloud Drive can evict downloaded copies or coordinate writes in ways Syncthing doesn't expect, so they're not recommended. Access depends on a security-scoped bookmark; if the folder is moved or deleted, sync for it stops.
-- **Battery and data.** Syncing large folders over cellular uses mobile data, and there's no Wi-Fi-only setting yet. Hashing large files uses CPU and battery.
+- **Battery.** Hashing and transferring large folders uses CPU and battery. Use *Sync on Wi-Fi Only* and bandwidth limits to reduce the impact.
 
-### Embedded-engine limits
-The bridge talks to Syncthing in-process rather than through its REST API, so some information the web GUI shows isn't available:
-- **No per-device transfer rates or byte counters.** Syncthing doesn't expose these outside its REST layer, so per-device rates read as zero; total upload and download rates are accurate.
-- **Pending devices are only seen while the app runs.** A device that tried to connect while SuperSynch was closed isn't listed until it tries again. Pending *folders* are stored by Syncthing and always shown.
-- **No system log or error list.** Syncthing's internal error recorder isn't reachable. Folder-level errors (failed items) are shown.
-- **Folder statistics are partial.** "Last scan" is only known for scans since the app started, and the "last synced file" isn't available.
-- **Re-implemented internals.** Syncthing starts its folder-summary service only together with its web GUI, which is disabled here. The bridge contains a port of it (`go/stbridge/summary.go`) that must be kept in step when Syncthing is upgraded.
+### Embedded-engine notes
+- **Model access via reflection.** `lib/syncthing` exposes only part of Syncthing's model, so the bridge reads the full model from an unexported field (`go/stbridge/model.go`). This is checked by tests, but it must be re-verified whenever Syncthing is upgraded.
 - **Pinned Syncthing version.** Syncthing is pinned by commit (v2.1.5) because its `v2` tags don't use a `/v2` Go module path. Upgrading means bumping the commit, rebuilding the bridge and re-running the tests; it doesn't happen automatically.
-- **Folder types.** Receive-encrypted folders (untrusted devices) can be accepted, but there's no UI for setting encryption passwords.
-- **Not available in the app yet:** ignore patterns, file versioning and restore, conflict resolution, introducer settings and bandwidth limits. Use the Mac's Syncthing for these where they apply.
+- **Warnings are captured from the logger.** Syncthing's own log recorder is internal, so the app captures warning- and error-level log lines itself. Info-level logs aren't kept.
+- **Ignore patterns aren't synced.** Like desktop Syncthing, `.stignore` is per device. Editing ignores requires the folder to be running (not paused).
+- **Not available in the app yet:** per-folder advanced settings (rescan interval, file watcher, pull order, minimum free disk space), editing an existing folder's path, auto-accept folders, and changing the GUI/API (deliberately off). These are planned for a later version.
 
 ### Testing status
-- Tested on the iOS simulator, including a real embedded node syncing files both ways with a separate Syncthing v2.1.5 process. **Not yet tested on a physical iPhone or iPad, or against a real Mac over Wi-Fi**: real-network behaviour, background-task timing, Files-app integration on device, and battery impact still need verifying.
-- **Running the app (not the tests) in the simulator conflicts with a Syncthing on the same Mac.** The simulator shares the Mac's network, so both try to listen on port 22000. Use a real device or `-DemoMode` for UI work. The tests use separate ports.
+- Tested on the iOS simulator, including a real embedded node syncing files both ways with a separate Syncthing v2.1.5 process (pairing, pending requests, per-device statistics, ignore patterns, version restore). **Not yet tested on a physical iPhone or iPad, or against a real Mac over Wi-Fi**: real-network behaviour, background-task timing, Wi-Fi-only switching, Files-app integration on device, and battery impact still need verifying.
+- In the simulator, the app listens on port **22010** instead of 22000, so it doesn't collide with a Syncthing running on the same Mac. Real devices use the default port.
 - QR scanning needs a device camera; it isn't available in the simulator. Paste the ID there instead.
 
 ## Architecture
 
 ```
-go/stbridge/          Go bridge around Syncthing's lib/syncthing (App + Internals).
+go/stbridge/          Go bridge around Syncthing's lib/syncthing (App + model).
                       Exposes a Node to Swift; data crosses as JSON shaped like
-                      Syncthing's REST API. Re-implements the folder-summary
-                      service (Syncthing only starts it with its web GUI).
+                      Syncthing's REST API. Runs Syncthing's folder-summary
+                      service itself (Syncthing only starts it with its web GUI).
 Frameworks/           Stbridge.xcframework (generated; scripts/build-bridge.sh)
 SyncthingKit/         Shared Swift core: SyncEngine (node lifecycle),
                       EmbeddedSyncthingClient (async wrapper), models, event
@@ -102,7 +103,7 @@ TEST_RUNNER_PEER_URL=http://127.0.0.1:8386 TEST_RUNNER_PEER_API_KEY=e2e-key scri
 (cd go && PEER_URL=http://127.0.0.1:8386 PEER_API_KEY=e2e-key go test -tags noassets ./stbridge/)
 ```
 
-> **Simulator note:** running the app (not the tests) in the simulator conflicts with a Syncthing already running on the Mac; see [Limitations](#limitations).
+> **Simulator note:** in the simulator the app's Syncthing listens on port 22010 so it doesn't clash with a Syncthing on your Mac; see [Limitations](#limitations).
 
 ### Demo mode
 `-DemoMode` runs the UI against sample data without starting Syncthing:
@@ -122,4 +123,4 @@ xcrun simctl launch booted xyz.santacroce.SuperSynch -DemoMode -DemoSection fold
 - Syncthing is MPL-2.0. The app links it unmodified; the source is at github.com/syncthing/syncthing.
 
 ## Roadmap
-File versioning and restore, ignore patterns, conflict resolution UI, selective/on-demand sync (download individual files via the bridge's block API), a File Provider extension, widgets, and requesting the multicast entitlement for local discovery.
+On-demand files (download individual files via the bridge's block API) and a File Provider extension, per-folder advanced settings, widgets, testing on physical devices, and requesting the multicast entitlement for local discovery.

@@ -19,11 +19,12 @@ go/stbridge/   Go package bound with gomobile (Swift sees StbridgeNode).
   node.go      lifecycle (NewNode/Start/Stop, restartable in-process), mobile defaults
                (GUI off, UR/crash reports off, no upgrades), Events long-poll
   query.go     getters returning REST-shaped JSON (status, config, completion, need…)
-  mutate.go    config changes via cfg.Modify (folders, devices, pause, ignore, options)
-  summary.go   port of lib/model folderSummaryService (emits FolderSummary +
-               FolderCompletion events); Syncthing starts the original only with the GUI
-  cache.go     state only visible via REST otherwise (connections, folder errors,
-               pending devices, last scan), fed by events
+  mutate.go    config changes via cfg.Modify (folders, devices, pause, ignore, options),
+               dismiss pending, versions/restore, ignores, override/revert
+  model.go     reads the full model.Model from app.Internals' unexported field (reflection);
+               re-verify on Syncthing upgrades (TestNodeLifecycleAndQueries covers it)
+  logs.go      captures warning/error slog records (Syncthing's recorder is internal)
+  node.go also starts model.NewFolderSummaryService itself (Syncthing only does with the GUI)
 SyncthingKit/Sources/
   Engine/      SyncEngine (@MainActor, owns node + start/stop off-main), EmbeddedSyncthingClient
                (async wrapper; blocking Go calls on a dedicated queue; cancellable),
@@ -41,6 +42,8 @@ SuperSynch/    SwiftUI views only + App/BackgroundSync.swift (BGTaskScheduler, f
 - New folders and devices go through `SetFolderJSON` / `SetDeviceJSON`, which merge a partial object onto the defaults or the existing entry.
 - Pure logic lives in `EventReducer` / `NodeState`; side effects live in `SyncSession`. Add a test for each.
 - iOS background: never assume the engine is running. Every client call can throw `.notRunning`.
+- `AppModel` runs the engine only while active/background-syncing AND `NetworkPolicy.allowsSync` (Wi-Fi only / Low Data Mode).
+- The simulator build listens on port 22010 (`AppEnvironment.simulatorOptions`) to avoid the host's Syncthing.
 - No telemetry or secrets. The device key lives in the app container (`Application Support/Syncthing/config`).
 - UI strings: SwiftUI literals in the app. In the framework, use `String(localized:bundle: SyncthingKit.bundle)`.
 - Use semantic colours, and respect Reduce Motion.
