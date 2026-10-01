@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuperSynch — Syncthing for iPhone and iPad</title>
+<meta name="description" content="SuperSynch runs Syncthing on your iPhone and iPad and syncs folders directly with your Mac. Peer to peer, end-to-end encrypted, no cloud in between.">
+<meta property="og:title" content="SuperSynch — Syncthing for iPhone and iPad">
+<meta property="og:description" content="Sync folders between your iPhone and your Mac, peer to peer, with Syncthing running right on the phone.">
+<meta property="og:image" content="images/iphone-device.png">
+<meta name="theme-color" content="#0188d0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230188d0'/%3E%3Cpath d='M20 26a13 13 0 0 1 23-6l3-3v10h-10l3-3a8 8 0 0 0-14 2zm24 12a13 13 0 0 1-23 6l-3 3V37h10l-3 3a8 8 0 0 0 14-2z' fill='white'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f5f7fa;
+    --card: #ffffff;
+    --text: #0f1419;
+    --muted: #5b6672;
+    --line: #e3e8ee;
+    --accent: #0188d0;
+    --accent-soft: #e6f4fc;
+    --accent-text: #0170ad;
+    --green: #22a25a;
+    --orange: #d9822b;
+    --shadow: 0 20px 50px -20px rgba(15, 20, 25, .25), 0 2px 6px rgba(15, 20, 25, .06);
+    --radius: 18px;
+    --max: 1120px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d10;
+      --bg-soft: #12161b;
+      --card: #161b21;
+      --text: #eef2f6;
+      --muted: #9aa6b2;
+      --line: #252c34;
+      --accent: #48b0f0;
+      --accent-soft: #0f2a3b;
+      --accent-text: #6cc0f5;
+      --green: #3ccf7a;
+      --orange: #f0a04b;
+      --shadow: 0 24px 60px -24px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .3);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-text); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { max-width: 100%; display: block; }
+  code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 600px) { .wrap { padding: 0 16px; } }
+
+  /* Nav */
+  header.nav {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); letter-spacing: -.01em; }
+  .brand:hover { text-decoration: none; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; flex: none; }
+  .nav ul { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; font-size: 15px; }
+  .nav ul a { color: var(--muted); }
+  .nav ul a:hover { color: var(--text); text-decoration: none; }
+  @media (max-width: 760px) { .nav ul li:not(.keep) { display: none; } }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border-radius: 999px; font-weight: 600; font-size: 16px;
+    border: 1px solid transparent; transition: transform .15s ease, background .15s ease;
+  }
+  .btn:hover { text-decoration: none; transform: translateY(-1px); }
+  @media (prefers-reduced-motion: reduce) { .btn:hover { transform: none; } }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.ghost { border-color: var(--line); color: var(--text); background: var(--card); }
+
+  /* Hero */
+  .hero { padding: 72px 0 40px; overflow: hidden; }
+  .hero .wrap { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; }
+  @media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } .hero { padding-top: 40px; } }
+  .eyebrow {
+    display: inline-flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600;
+    color: var(--accent-text); background: var(--accent-soft); padding: 6px 12px; border-radius: 999px;
+  }
+  h1 { font-size: clamp(40px, 6vw, 68px); line-height: 1.04; letter-spacing: -.035em; margin: 18px 0 18px; }
+  h1 .accent { color: var(--accent); }
+  .lead { font-size: clamp(18px, 2vw, 21px); color: var(--muted); max-width: 34em; margin: 0 0 28px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .meta { margin-top: 22px; font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .meta span::before { content: "✓"; color: var(--green); font-weight: 700; margin-right: 6px; }
+
+  /* Device frames */
+  .devices { position: relative; display: flex; justify-content: center; gap: 22px; min-height: 520px; }
+  .phone {
+    width: 250px; border-radius: 42px; padding: 9px; background: #0d0f12;
+    box-shadow: var(--shadow), inset 0 0 0 1.5px #2a2f36; flex: none;
+  }
+  .phone img { border-radius: 34px; width: 100%; height: auto; }
+  .devices .phone:nth-child(2) { transform: translateY(46px); }
+  @media (max-width: 600px) {
+    .devices { min-height: 0; gap: 12px; }
+    .phone { width: 46%; border-radius: 30px; padding: 6px; }
+    .phone img { border-radius: 25px; }
+    .devices .phone:nth-child(2) { transform: translateY(28px); }
+  }
+  .tablet {
+    width: 100%; max-width: 380px; justify-self: center;
+    border-radius: 30px; padding: 12px; background: #0d0f12;
+    box-shadow: var(--shadow), inset 0 0 0 1.5px #2a2f36;
+  }
+  @media (max-width: 600px) { .tablet { max-width: 320px; border-radius: 24px; padding: 8px; } .tablet img { border-radius: 16px; } }
+  .tablet img { border-radius: 20px; }
+
+  /* Sections */
+  section { padding: 84px 0; }
+  section.soft { background: var(--bg-soft); }
+  .section-head { max-width: 680px; margin-bottom: 44px; }
+  h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.1; letter-spacing: -.025em; margin: 0 0 14px; }
+  .section-head p { color: var(--muted); font-size: 19px; margin: 0; }
+  .kicker { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); margin-bottom: 10px; }
+
+  /* Feature grid */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 24px; transition: border-color .2s ease;
+  }
+  .card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .card h3 { font-size: 18px; margin: 14px 0 6px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .icon {
+    width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .icon svg { width: 22px; height: 22px; }
+
+  /* Steps */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: step; }
+  @media (max-width: 900px) { .steps { grid-template-columns: 1fr; } }
+  .step { position: relative; padding: 26px 24px 24px 24px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 700; margin-bottom: 14px;
+  }
+  .step h3 { margin: 0 0 6px; font-size: 18px; }
+  .step p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .diagram { margin-top: 36px; display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 15px; }
+  .node { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); color: var(--text); font-weight: 600; }
+  .link { display: flex; align-items: center; gap: 8px; }
+  .link .line { width: 70px; height: 2px; background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 14px); }
+  @media (max-width: 600px) { .link .line { width: 32px; } }
+
+  /* Grid children may shrink below their content width (code blocks scroll instead). */
+  .hero .wrap > *, .split > *, .grid > *, .steps > *, .notes > * { min-width: 0; }
+
+  /* Split */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; justify-items: stretch; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; gap: 36px; } }
+  .checks { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 12px; }
+  .checks li { display: flex; gap: 12px; color: var(--muted); }
+  .checks li strong { color: var(--text); font-weight: 600; }
+  .checks li::before {
+    content: ""; flex: none; width: 22px; height: 22px; margin-top: 2px; border-radius: 50%;
+    background: var(--accent-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230188d0' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/13px no-repeat;
+  }
+  .pair { display: flex; gap: 18px; justify-content: center; }
+  .pair .phone { width: 230px; }
+  @media (max-width: 600px) { .pair .phone { width: 46%; } }
+
+  /* Notes */
+  .notes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 760px) { .notes { grid-template-columns: 1fr; } }
+  .note { border-left: 3px solid var(--orange); background: var(--card); border-radius: 0 var(--radius) var(--radius) 0; padding: 20px 22px; border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .note h3 { margin: 0 0 6px; font-size: 17px; }
+  .note p { margin: 0; color: var(--muted); font-size: 15.5px; }
+
+  /* Code */
+  pre {
+    background: #0d1117; color: #e6edf3; border-radius: var(--radius); padding: 22px 24px;
+    overflow-x: auto; font-size: 14.5px; line-height: 1.7; margin: 0; border: 1px solid #222a33;
+  }
+  pre .c { color: #7d8590; }
+  pre .p { color: #79c0ff; user-select: none; }
+  .requirements { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 22px; padding: 0; list-style: none; }
+  .requirements li { font-size: 14px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--muted); }
+
+  /* Footer */
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--muted); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; }
+  footer p { margin: 0; max-width: 640px; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="SuperSynch home">
+      <span class="logo" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7a8 8 0 0 0-14.5-1.5M4 3v4h4"/><path d="M4 17a8 8 0 0 0 14.5 1.5M20 21v-4h-4"/></svg>
+      </span>
+      SuperSynch
+    </a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#limits">Good to know</a></li>
+        <li><a href="#build">Build</a></li>
+        <li class="keep"><a href="https://github.com/santacroce-tech/supersynch">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <span class="eyebrow">For iPhone &amp; iPad · powered by Syncthing</span>
+        <h1>Your files, synced.<br><span class="accent">No cloud in between.</span></h1>
+        <p class="lead">SuperSynch runs Syncthing on your iPhone and iPad, so your phone becomes a real Syncthing device. It syncs folders directly with your Mac, peer to peer and end-to-end encrypted.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/santacroce-tech/supersynch">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            View on GitHub
+          </a>
+          <a class="btn ghost" href="#how">How it works</a>
+        </div>
+        <div class="meta">
+          <span>iOS &amp; iPadOS 17+</span>
+          <span>Syncthing v2.1.5 inside</span>
+          <span>No accounts, no tracking</span>
+        </div>
+      </div>
+      <div class="devices" aria-label="App screenshots">
+        <div class="phone"><img src="images/iphone-device.png" alt="This Device screen showing the device ID QR code, sync status and transfer rates" width="507" height="1100"></div>
+        <div class="phone"><img src="images/iphone-folders.png" alt="Folders list with Up to Date, Paused and Syncing folders" width="507" height="1100"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="soft">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Features</div>
+        <h2>Everything you need to keep your phone in sync with your Mac.</h2>
+        <p>A native SwiftUI app around the real Syncthing engine. It syncs with any Syncthing device you already run.</p>
+      </div>
+      <div class="grid">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 17h4v4h-4"/></svg></div>
+          <h3>Pair in seconds</h3>
+          <p>Show your phone's device ID as a QR code, and scan or paste your Mac's ID. That's all it takes.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+          <h3>Right in the Files app</h3>
+          <p>Synced folders appear under <em>On My iPhone › SuperSynch</em>, so every app can use them. There's also a built-in browser with Quick Look.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><path d="M3 3l18 18"/></svg></div>
+          <h3>Selective sync</h3>
+          <p>Ignore patterns let you sync only part of a large folder, so your phone keeps just what you need.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/></svg></div>
+          <h3>Versions &amp; conflicts</h3>
+          <p>Keep old versions of changed or deleted files and restore them in a tap. Resolve sync conflicts by choosing which copy wins.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+          <h3>Private by design</h3>
+          <p>Data goes straight between your devices over TLS. Share a folder encrypted with a device you don't fully trust.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14 0M1.4 9a16 16 0 0 1 21.2 0M8.5 16.1a6 6 0 0 1 7 0M12 20h.01"/></svg></div>
+          <h3>Mindful of data</h3>
+          <p>Sync on Wi-Fi only, pause in Low Data Mode, and set bandwidth limits for everything or for each device.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+          <h3>Live status</h3>
+          <p>See sync progress, transfer rates, what's out of sync and which devices are connected, updated live from Syncthing's event stream.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M9 4v16"/></svg></div>
+          <h3>Made for iPad, too</h3>
+          <p>A three-column layout on iPad, a stack on iPhone, with Split View, Stage Manager and keyboard shortcuts.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+          <h3>Syncs in the background</h3>
+          <p>It finishes transfers after you leave the app and catches up whenever iOS grants background time.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">How it works</div>
+        <h2>Two devices, one folder, no middleman.</h2>
+        <p>SuperSynch isn't a remote control and doesn't use a server. The phone runs Syncthing itself and talks directly to the Syncthing on your Mac.</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <h3>Show your phone's ID</h3>
+          <p>Open <em>This Device</em> to see your phone's Syncthing ID and QR code.</p>
+        </div>
+        <div class="step">
+          <h3>Introduce the devices</h3>
+          <p>Add the phone in your Mac's Syncthing (<em>Add Remote Device</em>), and add the Mac on the phone by scanning or pasting its ID.</p>
+        </div>
+        <div class="step">
+          <h3>Share a folder</h3>
+          <p>Share a folder from either side and accept it on the other. Changes now flow both ways.</p>
+        </div>
+      </div>
+      <div class="diagram" aria-hidden="true">
+        <span class="node">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>
+          iPhone
+        </span>
+        <span class="link"><span class="line"></span>TLS · peer to peer<span class="line"></span></span>
+        <span class="node">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M1 20h22"/></svg>
+          Mac
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <section class="soft">
+    <div class="wrap split">
+      <div class="tablet"><img src="images/ipad-folders.png" alt="iPad split view showing the folders list and the Photos folder's details" width="965" height="1400" loading="lazy"></div>
+      <div>
+        <div class="kicker">iPad</div>
+        <h2>Room to see everything.</h2>
+        <p class="section-head" style="color:var(--muted);font-size:19px;margin:0">On iPad, folders and devices sit beside their details: progress, what's out of sync, sharing, versions and more.</p>
+        <ul class="checks">
+          <li><span><strong>Master–detail layout</strong> that adapts to Split View and Stage Manager.</span></li>
+          <li><span><strong>Keyboard shortcuts:</strong> ⌘R to refresh, ⌘1–4 to switch sections, ⇧⌘R to rescan everything.</span></li>
+          <li><span><strong>One codebase.</strong> iPhone and iPad share the same engine and screens.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div>
+        <div class="kicker">Native</div>
+        <h2>Feels like it belongs on your iPhone.</h2>
+        <p style="color:var(--muted);font-size:19px;margin:0">Built with SwiftUI, with clear colours and icons for every sync state.</p>
+        <ul class="checks">
+          <li><span><strong>Dark Mode</strong> and <strong>Dynamic Type</strong> throughout.</span></li>
+          <li><span><strong>Reduce Motion</strong> respected for every animation.</span></li>
+          <li><span><strong>VoiceOver</strong> labels for status, progress and actions.</span></li>
+        </ul>
+      </div>
+      <div class="pair">
+        <div class="phone"><img src="images/iphone-home.png" alt="Main screen with status summary and sections" width="507" height="1100" loading="lazy"></div>
+        <div class="phone"><img src="images/iphone-folders-dark.png" alt="Folders list in Dark Mode" width="507" height="1100" loading="lazy"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="limits" class="soft">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="kicker">Good to know</div>
+        <h2>Honest about what iOS allows.</h2>
+        <p>Syncthing on a phone isn't the same as on a desktop. Here's what to expect. The <a href="https://github.com/santacroce-tech/supersynch#limitations">README</a> has the full list.</p>
+      </div>
+      <div class="notes">
+        <div class="note">
+          <h3>Background sync is limited</h3>
+          <p>iOS doesn't let apps run all the time. SuperSynch syncs while it's open, for about 30 seconds after you leave, and when iOS grants background time (often while charging). Open the app to catch up.</p>
+        </div>
+        <div class="note">
+          <h3>Local discovery needs Apple's approval</h3>
+          <p>LAN discovery uses broadcasts that require a special Apple entitlement. Until then, devices find each other through global discovery or relays, or you can enter your Mac's address directly.</p>
+        </div>
+        <div class="note">
+          <h3>Whole files, not on demand</h3>
+          <p>Every file that isn't ignored is downloaded to the phone. Use ignore patterns to sync only part of a large folder.</p>
+        </div>
+        <div class="note">
+          <h3>Early days</h3>
+          <p>Verified end to end against Syncthing v2.1.5, but still young software. Keep backups of anything important.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="wrap split">
+      <div>
+        <div class="kicker">Build from source</div>
+        <h2>Run it on your own device.</h2>
+        <p style="color:var(--muted);font-size:19px;margin:0 0 22px">SuperSynch isn't on the App Store yet. Build it with Xcode and install it on your iPhone or iPad.</p>
+        <ul class="requirements">
+          <li>macOS + Xcode 16 or later</li>
+          <li>Go 1.26+</li>
+          <li>XcodeGen</li>
+          <li>iOS / iPadOS 17+</li>
+        </ul>
+        <p style="color:var(--muted);margin:0">Select your team under <em>Signing &amp; Capabilities</em>, choose your device and press ⌘R. See the README for pairing, testing and debugging.</p>
+      </div>
+      <pre><code><span class="c"># Clone</span>
+<span class="p">$ </span>git clone https://github.com/santacroce-tech/supersynch
+<span class="p">$ </span>cd supersynch
+
+<span class="c"># Build the embedded Syncthing (gomobile)</span>
+<span class="p">$ </span>scripts/build-bridge.sh
+
+<span class="c"># Generate the Xcode project and run the tests</span>
+<span class="p">$ </span>xcodegen generate
+<span class="p">$ </span>scripts/test.sh
+
+<span class="c"># Open in Xcode and run on your device</span>
+<span class="p">$ </span>open SuperSynch.xcodeproj</code></pre>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Syncthing is a trademark of the Syncthing Foundation. SuperSynch is an independent project and is not affiliated with or endorsed by the Syncthing Foundation. The embedded Syncthing is open source under the <a href="https://github.com/syncthing/syncthing/blob/main/LICENSE">MPL-2.0</a>.</p>
+    <p>© 2026 <a href="https://github.com/santacroce-tech">Santacroce Tech</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -7,3 +7,4 @@ DerivedData/
 xcuserdata/
 *.xcresult
 Frameworks/
+.playwright-mcp/

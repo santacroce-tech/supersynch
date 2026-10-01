@@ -217,7 +217,8 @@ public enum MockData {
         s.applyDevices(devices)
         s.folderStatuses = [
             "photos": FolderStatus(state: "syncing", globalBytes: 10_000_000_000, globalFiles: 12_034, globalDirectories: 312,
-                                   localBytes: 8_200_000_000, needBytes: 1_800_000_000, needFiles: 1_200, needTotalItems: 1_200),
+                                   localBytes: 8_200_000_000, localFiles: 10_834, localDirectories: 312,
+                                   needBytes: 1_800_000_000, needFiles: 1_200, needTotalItems: 1_200),
             "docs": FolderStatus(state: "idle", globalBytes: 420_000_000, globalFiles: 3_210, globalDirectories: 150,
                                  localBytes: 420_000_000, localFiles: 3_210, localDirectories: 150, inSyncBytes: 420_000_000),
         ]
